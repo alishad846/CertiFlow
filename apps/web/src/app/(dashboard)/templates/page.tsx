@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Copy, PencilLine, Trash2, Sparkles, Plus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -27,7 +26,6 @@ type MeResponse = {
 };
 
 export default function TemplatesPage() {
-  const router = useRouter();
   const [companyId, setCompanyId] = useState('');
   const [role, setRole] = useState<MeResponse['user']['role']>('company_admin');
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
@@ -157,7 +155,7 @@ export default function TemplatesPage() {
                           const result = await apiFetch<{ template: TemplateItem }>(`/certificate-templates/${template.id}/duplicate`, {
                             method: 'POST'
                           });
-                          router.push(`/certificate-editor/${result.template.id}`);
+                          window.location.assign(`/certificate-editor/${result.template.id}`);
                         } catch (error) {
                           setMessage(error instanceof Error ? error.message : 'Failed to duplicate template');
                         } finally {
@@ -183,7 +181,7 @@ export default function TemplatesPage() {
                             body: JSON.stringify({ isActive: true })
                           });
                           setTemplates((current) => current.map((item) => ({ ...item, isActive: item.id === template.id })));
-                          router.push('/uploads');
+                          window.location.assign('/uploads');
                         } catch (error) {
                           setMessage(error instanceof Error ? error.message : 'Failed to activate template');
                         } finally {

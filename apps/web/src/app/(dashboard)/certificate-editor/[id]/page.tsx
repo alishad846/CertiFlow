@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { CertificateEditor } from '@/components/certificate-editor/certificate-editor';
@@ -28,8 +28,7 @@ type CertificateEditorSavePayload = {
 };
 
 export default function CertificateEditorPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params = useParams<{ id?: string }>() ?? {};
   const [template, setTemplate] = useState<CertificateTemplateResponse['template'] | null>(null);
   const [loading, setLoading] = useState(true);
   const templateId = String(params.id ?? '');
@@ -43,7 +42,7 @@ export default function CertificateEditorPage() {
         }
       })
       .catch(() => {
-        router.replace('/certificate-editor');
+        window.location.replace('/certificate-editor');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -52,7 +51,7 @@ export default function CertificateEditorPage() {
     return () => {
       active = false;
     };
-  }, [templateId, router]);
+  }, [templateId]);
 
   if (loading || !template) {
     return (
@@ -63,11 +62,11 @@ export default function CertificateEditorPage() {
   }
 
   return (
-    <CertificateEditor
-      template={template}
-      onSave={async (payload: CertificateEditorSavePayload) => {
-        const result = await apiFetch<CertificateTemplateResponse>(`/certificate-templates/${template.id}`, {
-          method: 'PUT',
+      <CertificateEditor
+        template={template}
+        onSave={async (payload: CertificateEditorSavePayload) => {
+          const result = await apiFetch<CertificateTemplateResponse>(`/certificate-templates/${template.id}`, {
+            method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
           },

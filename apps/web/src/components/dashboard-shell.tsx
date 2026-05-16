@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FileUp,
@@ -40,20 +39,27 @@ type MeResponse = {
 };
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<MeResponse['user'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [pathname, setPathname] = useState('');
 
   useEffect(() => {
+    setPathname(window.location.pathname);
+
+    const handlePopState = () => {
+      setPathname(window.location.pathname);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
     let active = true;
     apiFetch<MeResponse>('/auth/me')
       .then((data) => {
         if (active) setUser(data.user);
       })
       .catch(() => {
-        router.replace('/login');
+        window.location.replace('/login');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -61,8 +67,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
     return () => {
       active = false;
+      window.removeEventListener('popstate', handlePopState);
     };
-  }, [router]);
+  }, []);
 
   if (loading) {
     return (
@@ -210,7 +217,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 variant="secondary"
                 onClick={async () => {
                   await apiFetch('/auth/logout', { method: 'POST' });
-                  router.replace('/login');
+                  window.location.replace('/login');
                 }}
               >
                 <span className="inline-flex items-center gap-2">

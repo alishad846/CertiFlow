@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { UploadCloud, Sparkles } from 'lucide-react';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -10,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { FileDropzone } from '@/components/ui/file-dropzone';
 
 export default function UploadPage() {
-  const router = useRouter();
   const previewSectionRef = useRef<HTMLDivElement | null>(null);
   const [batchName, setBatchName] = useState('');
   const [companyId, setCompanyId] = useState('');
@@ -78,7 +76,7 @@ export default function UploadPage() {
               });
               setMessage(`Batch queued successfully. ${result.totalRows} rows are being processed.`);
               window.setTimeout(() => {
-                router.push(`/batches/${result.batchId}`);
+                window.location.assign(`/batches/${result.batchId}`);
               }, 900);
             } catch (error) {
               setMessage(error instanceof Error ? error.message : 'Upload failed');

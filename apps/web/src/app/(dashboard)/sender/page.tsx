@@ -35,7 +35,7 @@ type MeResponse = {
 
 export default function SenderSettingsPage() {
   const searchParams = useSearchParams();
-  const initialCompanyId = searchParams.get('companyId')?.trim() || '';
+  const initialCompanyId = searchParams?.get('companyId')?.trim() || '';
 
   const [role, setRole] = useState<MeResponse['user']['role'] | null>(null);
   const [companyId, setCompanyId] = useState(initialCompanyId);

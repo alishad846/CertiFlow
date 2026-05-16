@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ImagePlus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -10,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { FileDropzone } from '@/components/ui/file-dropzone';
 
 export default function CertificateEditorStartPage() {
-  const router = useRouter();
   const [companyId, setCompanyId] = useState('');
   const [name, setName] = useState('');
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
@@ -48,7 +46,7 @@ export default function CertificateEditorStartPage() {
                 method: 'POST',
                 body: form
               });
-              router.push(`/certificate-editor/${result.template.id}`);
+              window.location.assign(`/certificate-editor/${result.template.id}`);
             } catch (error) {
               setMessage(error instanceof Error ? error.message : 'Failed to create template');
             } finally {

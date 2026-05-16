@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import styles from '../auth.module.css';
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -39,7 +37,7 @@ export default function RegisterPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
               });
-              router.push('/dashboard');
+              window.location.assign('/dashboard');
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Registration failed');
             } finally {

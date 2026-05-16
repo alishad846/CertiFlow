@@ -1,6 +1,13 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: path.resolve(__dirname, '../..'),
+  transpilePackages: ['@certiflow/shared'],
   allowedDevOrigins: ['http://localhost:3000', 'http://192.168.56.1:3000'],
   async headers() {
     return [

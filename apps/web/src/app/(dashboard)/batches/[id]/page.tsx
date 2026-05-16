@@ -30,7 +30,7 @@ type BatchDetailResponse = {
 };
 
 export default function BatchDetailPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id?: string }>() ?? {};
   const [error, setError] = useState('');
   const [data, setData] = useState<BatchDetailResponse | null>(null);
 
