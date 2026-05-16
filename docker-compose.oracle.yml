@@ -1,0 +1,50 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      UPLOAD_DIR: /app/uploads
+    expose:
+      - '4000'
+    volumes:
+      - api_uploads:/app/uploads
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      UPLOAD_DIR: /app/uploads
+    command: ['npm', 'run', 'start:worker', '--workspace', '@certiflow/api']
+    volumes:
+      - api_uploads:/app/uploads
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      - ./docker/oracle/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  api_uploads:
+  caddy_data:
+  caddy_config:
