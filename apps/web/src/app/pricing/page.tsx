@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { ArrowRight, Banknote, CheckCircle2, QrCode, ShieldCheck, Smartphone } from 'lucide-react';
-import { PRICING_RULES } from '@certiflow/shared';
+import { PRICING_PLANS, PRICING_RULES } from '@certiflow/shared';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getLivePricingPlans } from '@/lib/pricing';
 
 const steps = [
   'Choose a credit pack that matches your monthly volume.',
@@ -12,9 +11,7 @@ const steps = [
   'Submit your transaction reference and let the super admin approve it.'
 ];
 
-export default async function PricingPage() {
-  const pricingPlans = await getLivePricingPlans();
-
+export default function PricingPage() {
   return (
     <main className="min-h-screen px-4 py-6 text-ink md:px-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -35,7 +32,7 @@ export default async function PricingPage() {
 
         <div className="grid gap-6 lg:grid-cols-[1.15fr,0.85fr] lg:items-start">
           <div className="grid gap-6 lg:grid-cols-3">
-            {pricingPlans.map((plan) => (
+            {PRICING_PLANS.map((plan) => (
               <Card key={plan.key} className="relative overflow-hidden">
                 {plan.recommended ? (
                   <div className="absolute right-4 top-4">

@@ -19,7 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { getLivePricingPlans } from '@/lib/pricing';
+import { PRICING_PLANS } from '@certiflow/shared';
 
 const workflow = [
   {
@@ -109,9 +109,7 @@ const pricingFeatureList = [
   'Credit deduction per recipient'
 ];
 
-export default async function HomePage() {
-  const pricingPlans = await getLivePricingPlans();
-
+export default function HomePage() {
   return (
     <main className="relative min-h-screen overflow-hidden px-4 py-4 text-ink md:px-6 md:py-6">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -370,7 +368,7 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-6 grid gap-4">
-              {pricingPlans.map((plan) => (
+              {PRICING_PLANS.map((plan) => (
                 <div key={plan.key} className="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div>
