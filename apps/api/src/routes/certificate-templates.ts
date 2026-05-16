@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { getCompanyAccess } from '../services/companies';
 import {
+  type CertificateFieldConfig,
   createCertificateTemplate,
   deleteCertificateTemplate,
   duplicateCertificateTemplate,
@@ -95,6 +96,20 @@ const fieldConfigSchema = z.array(
     text: z.string().optional()
   })
 );
+
+function parseFieldConfig(value: unknown): CertificateFieldConfig[] {
+  return fieldConfigSchema.parse(value).map((entry) => ({
+    field: entry.field,
+    x: entry.x,
+    y: entry.y,
+    width: entry.width,
+    fontSize: entry.fontSize,
+    fontFamily: entry.fontFamily,
+    color: entry.color,
+    align: entry.align,
+    ...(entry.text !== undefined ? { text: entry.text } : {})
+  }));
+}
 
 async function resolveCompanyId(req: { user?: { role: string; companyId: string | null } }, requestedCompanyId?: string) {
   if (req.user?.role === 'super_admin') {
@@ -209,7 +224,7 @@ router.post(
     const name = String(req.body.name ?? '').trim();
     const companyId = await resolveCompanyId(req, String(req.body.companyId ?? '').trim());
     const rawFieldConfig = String(req.body.fieldConfig ?? '[]');
-    const fieldConfig = fieldConfigSchema.parse(JSON.parse(rawFieldConfig));
+    const fieldConfig = parseFieldConfig(JSON.parse(rawFieldConfig));
 
     if (!backgroundImage) {
       throw new AppError('Background image is required', 400);
@@ -309,7 +324,7 @@ router.put(
       updatedBy: req.user!.id,
       name: parsed.name,
       isActive: parsed.isActive,
-      fieldConfig: parsed.fieldConfig,
+      fieldConfig: parsed.fieldConfig ? parseFieldConfig(parsed.fieldConfig) : undefined,
       issueDateMode: parsed.issueDateMode,
       issueDateValue: parsed.issueDateValue ?? undefined
     });
