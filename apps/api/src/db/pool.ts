@@ -3,6 +3,24 @@ import { Pool, type PoolClient } from 'pg';
 import { env } from '../config/env';
 
 dns.setDefaultResultOrder('ipv4first');
+const originalLookup = dns.lookup.bind(dns);
+
+dns.lookup = ((hostname: string, options: unknown, callback?: unknown) => {
+  if (typeof options === 'function') {
+    return originalLookup(hostname, { family: 4 }, options as never);
+  }
+
+  if (typeof callback === 'function') {
+    const lookupOptions =
+      options && typeof options === 'object'
+        ? { ...(options as Record<string, unknown>), family: 4 }
+        : { family: 4 };
+
+    return originalLookup(hostname, lookupOptions, callback as never);
+  }
+
+  return originalLookup(hostname, options as never);
+}) as typeof dns.lookup;
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
