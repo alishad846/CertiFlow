@@ -1,9 +1,18 @@
+import dns from 'node:dns';
 import { Pool, type PoolClient } from 'pg';
 import { env } from '../config/env';
 
+dns.setDefaultResultOrder('ipv4first');
+
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  max: 10
+  max: 10,
+  ssl:
+    env.NODE_ENV === 'production'
+      ? {
+          rejectUnauthorized: false
+        }
+      : undefined
 });
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
