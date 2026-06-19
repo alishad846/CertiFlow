@@ -6,12 +6,18 @@ import { AppError } from '../lib/errors';
 import { buildTemplateContext } from '../services/excel';
 import { renderDocxTemplate } from '../services/docx';
 import { convertDocxToPdf } from '../services/pdf';
+import { renderPdfTemplate } from '../services/pdf-template';
 import { sendEmail } from '../services/email';
 import { renderPersonalizedAttachment } from '../services/attachment-template';
-import { getCertificateTemplateById, resolveCertificateIssueDate } from '../services/certificate-templates';
+import {
+  getActiveCertificateTemplate,
+  getCertificateTemplateById,
+  resolveCertificateIssueDate
+} from '../services/certificate-templates';
 import { renderCertificatePdf } from '../services/certificate-render';
 import { ensureDir, safeSegment } from '../services/fs';
 import { emailQueue } from '../services/queue';
+import { renderTemplateString } from '../services/template-placeholders';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -29,10 +35,17 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-function buildEmailHtml(message: string, recipientName: string) {
-  const resolved = message.replace(/{{\s*name\s*}}/gi, recipientName).trim();
-  const safeText = escapeHtml(resolved || `Hello ${recipientName},`);
-  return `<p>${safeText.replace(/\r?\n/g, '<br>')}</p><p>Please find your attached document.</p>`;
+function buildEmailHtml(message: string, context: Record<string, unknown>, attachmentMessage?: string | null) {
+  const name = String(context?.name ?? '').trim() || 'Recipient';
+  const resolvedMessage = renderTemplateString(message || '', context).trim();
+  const resolvedAttachment = renderTemplateString(attachmentMessage || '', context).trim();
+
+  const parts = [`<p>${escapeHtml(resolvedMessage || `Hello ${name},`).replace(/\r?\n/g, '<br>')}</p>`];
+  if (resolvedAttachment) {
+    parts.push(`<p>${escapeHtml(resolvedAttachment).replace(/\r?\n/g, '<br>')}</p>`);
+  }
+
+  return parts.join('');
 }
 
 async function getBatchTemplateFiles(batchId: string, fallbackTemplateUploadId: string | null) {
@@ -103,7 +116,7 @@ async function refreshBatchCounts(batchId: string) {
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE email_status = 'sent')::int AS sent,
        COUNT(*) FILTER (WHERE email_status = 'failed')::int AS failed,
-       COUNT(*) FILTER (WHERE generated_docx_path IS NOT NULL)::int AS processed
+       COUNT(*) FILTER (WHERE generated_docx_path IS NOT NULL OR generated_pdf_path IS NOT NULL)::int AS processed
      FROM documents
      WHERE batch_id = $1`,
     [batchId]
@@ -167,13 +180,11 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
   const batchAttachments = await getBatchAttachments(batch.id);
   const templateFiles = batch.template_type === 'offer_letter' ? await getBatchTemplateFiles(batch.id, batch.template_upload_id) : [];
   const certificateTemplate =
-    batch.template_type === 'certificate' && batch.certificate_template_id
-      ? await getCertificateTemplateById(batch.certificate_template_id, batch.company_id)
+    batch.template_type === 'certificate'
+      ? batch.certificate_template_id
+        ? await getCertificateTemplateById(batch.certificate_template_id, batch.company_id)
+        : await getActiveCertificateTemplate(batch.company_id)
       : null;
-
-  if (batch.template_type === 'certificate' && !certificateTemplate) {
-    throw new AppError('Certificate template missing', 400);
-  }
 
   await pool.query(`UPDATE batches SET status = 'processing', updated_at = NOW() WHERE id = $1`, [batch.id]);
 
@@ -237,19 +248,37 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
               path.basename(template.originalName, path.extname(template.originalName)) || `template-${templateIndex + 1}`
             );
             const suffix = `${templateIndex + 1}-${templateBase}`;
-            const docxPath = path.join(outputRoot, `${document.row_index}-${safeName}-${suffix}.docx`);
             const pdfName = `${document.row_index}-${safeName}-${suffix}.pdf`;
+            const templateExt = path.extname(template.originalName).toLowerCase();
+            const pdfPath = path.join(pdfDir, pdfName);
 
-            await renderDocxTemplate({
-              templatePath: template.path,
-              outputPath: docxPath,
-              data: context
-            });
+            if (templateExt === '.pdf') {
+              await renderPdfTemplate({
+                templatePath: template.path,
+                outputPath: pdfPath,
+                data: context
+              });
+              if (!primaryPdfPath) {
+                primaryPdfPath = pdfPath;
+              }
+            } else {
+              const docxPath = path.join(outputRoot, `${document.row_index}-${safeName}-${suffix}.docx`);
+              await renderDocxTemplate({
+                templatePath: template.path,
+                outputPath: docxPath,
+                data: context
+              });
 
-            const pdfPath = await convertDocxToPdf(docxPath, pdfDir);
-            if (!primaryDocxPath) {
-              primaryDocxPath = docxPath;
-              primaryPdfPath = pdfPath;
+              const convertedPdfPath = await convertDocxToPdf(docxPath, pdfDir);
+              if (!primaryDocxPath) {
+                primaryDocxPath = docxPath;
+                primaryPdfPath = convertedPdfPath;
+              }
+              generatedAttachments.push({
+                path: convertedPdfPath,
+                filename: path.basename(convertedPdfPath)
+              });
+              continue;
             }
             generatedAttachments.push({
               path: pdfPath,
@@ -272,16 +301,21 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             )
           : [];
 
-        if (!primaryDocxPath || !primaryPdfPath) {
-          throw new AppError('Failed to generate document attachments', 500);
+        if (primaryDocxPath || primaryPdfPath) {
+          await pool.query(
+            `UPDATE documents
+             SET generated_docx_path = $2, generated_pdf_path = $3, status = 'processing', updated_at = NOW()
+             WHERE id = $1`,
+            [document.id, primaryDocxPath ?? null, primaryPdfPath ?? null]
+          );
+        } else {
+          await pool.query(
+            `UPDATE documents
+             SET status = 'processing', updated_at = NOW()
+             WHERE id = $1`,
+            [document.id]
+          );
         }
-
-        await pool.query(
-          `UPDATE documents
-           SET generated_docx_path = $2, generated_pdf_path = $3, status = 'processing', updated_at = NOW()
-           WHERE id = $1`,
-          [document.id, primaryDocxPath, primaryPdfPath]
-        );
 
         await emailQueue.add(
           'send-email',
@@ -291,8 +325,8 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             documentId: document.id,
             recipientName: document.recipient_name,
             recipientEmail: document.recipient_email,
-            subject: `${batch.name} - ${batch.template_type === 'certificate' ? 'Certificate' : 'Offer Letter'}`,
-            html: buildEmailHtml(batch.email_message ?? '', document.recipient_name),
+            subject: batch.name,
+            html: buildEmailHtml(batch.email_message ?? '', certificateContext, batch.attachment_message ?? undefined),
             pdfPath: generatedAttachments[0]?.path,
             attachmentName: generatedAttachments[0]?.filename,
             attachments: [...generatedAttachments, ...extraAttachments],

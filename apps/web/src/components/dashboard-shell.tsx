@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FileUp,
@@ -42,17 +43,25 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse['user'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [pathname, setPathname] = useState('');
+  const pathname = usePathname();
+  const currentPath = pathname ?? '';
 
   useEffect(() => {
-    setPathname(window.location.pathname);
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
 
-    const handlePopState = () => {
-      setPathname(window.location.pathname);
+    const syncSidebarState = () => {
+      setSidebarExpanded(mediaQuery.matches);
     };
 
-    window.addEventListener('popstate', handlePopState);
+    syncSidebarState();
+    mediaQuery.addEventListener('change', syncSidebarState);
 
+    return () => {
+      mediaQuery.removeEventListener('change', syncSidebarState);
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     apiFetch<MeResponse>('/auth/me')
       .then((data) => {
@@ -67,7 +76,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
     return () => {
       active = false;
-      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 
@@ -92,7 +100,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#f4f8ff_0%,#ffffff_36%,#eef5ff_100%)] text-ink">
       <div className="mx-auto flex min-h-screen max-w-[1500px] gap-6 px-4 py-4 lg:px-6">
         <aside
-          className={`group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-hidden rounded-[30px] border border-white/70 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur transition-all duration-300 ${
+          className={`group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-y-auto overflow-x-hidden rounded-[30px] border border-white/70 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur transition-all duration-300 ${
             sidebarExpanded ? 'w-[280px] p-5' : 'w-14 p-2'
           }`}
         >
@@ -117,62 +125,62 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="mt-6 space-y-2">
-              <NavLink href="/dashboard" active={pathname === '/dashboard'}>
+              <NavLink href="/dashboard" active={currentPath === '/dashboard'}>
                 <span className="flex items-center gap-2">
                   <LayoutDashboard className="h-4 w-4" /> Dashboard
                 </span>
               </NavLink>
               {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/uploads" active={pathname === '/uploads'}>
+                <NavLink href="/uploads" active={currentPath === '/uploads'}>
                   <span className="flex items-center gap-2">
                     <FileUp className="h-4 w-4" /> Upload Batch
                   </span>
                 </NavLink>
               ) : null}
               {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/certificate-editor" active={pathname.startsWith('/certificate-editor')}>
+                <NavLink href="/certificate-editor" active={currentPath.startsWith('/certificate-editor')}>
                   <span className="flex items-center gap-2">
                     <Palette className="h-4 w-4" /> Certificate Editor
                   </span>
                 </NavLink>
               ) : null}
               {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/templates" active={pathname.startsWith('/templates')}>
+                <NavLink href="/templates" active={currentPath.startsWith('/templates')}>
                   <span className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4" /> My Templates
                   </span>
                 </NavLink>
               ) : null}
               {user?.role !== 'super_admin' && user?.permissions?.canViewReports !== false ? (
-                <NavLink href="/logs" active={pathname === '/logs'}>
+                <NavLink href="/logs" active={currentPath === '/logs'}>
                   <span className="flex items-center gap-2">
                     <ScrollText className="h-4 w-4" /> Email Logs
                   </span>
                 </NavLink>
               ) : null}
               {(user?.role === 'super_admin' || user?.permissions?.canRequestUpi !== false) ? (
-                <NavLink href="/billing" active={pathname.startsWith('/billing')}>
+                <NavLink href="/billing" active={currentPath.startsWith('/billing')}>
                   <span className="flex items-center gap-2">
                     <WalletCards className="h-4 w-4" /> Billing
                   </span>
                 </NavLink>
               ) : null}
               {(user?.role === 'super_admin' || user?.permissions?.canRequestUpi !== false) ? (
-                <NavLink href="/sender" active={pathname.startsWith('/sender')}>
+                <NavLink href="/sender" active={currentPath.startsWith('/sender')}>
                   <span className="flex items-center gap-2">
                     <Mail className="h-4 w-4" /> Email Sender
                   </span>
                 </NavLink>
               ) : null}
               {user?.role === 'super_admin' ? (
-                <NavLink href="/companies" active={pathname.startsWith('/companies')}>
+                <NavLink href="/companies" active={currentPath.startsWith('/companies')}>
                   <span className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" /> Companies
                   </span>
                 </NavLink>
               ) : null}
               {user?.role === 'super_admin' ? (
-                <NavLink href="/discounts" active={pathname.startsWith('/discounts')}>
+                <NavLink href="/discounts" active={currentPath.startsWith('/discounts')}>
                   <span className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4" /> Discounts
                   </span>

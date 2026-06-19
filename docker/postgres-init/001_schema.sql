@@ -6,7 +6,7 @@ BEGIN
     CREATE TYPE user_role AS ENUM ('super_admin', 'company_admin');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'upload_kind') THEN
-    CREATE TYPE upload_kind AS ENUM ('excel', 'docx');
+    CREATE TYPE upload_kind AS ENUM ('excel', 'docx', 'image', 'pdf');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'company_status') THEN
     CREATE TYPE company_status AS ENUM ('active', 'blocked');

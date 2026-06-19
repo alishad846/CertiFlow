@@ -4,6 +4,7 @@ import { pool, withTransaction } from '../db/pool';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { AppError } from '../lib/errors';
 import { rateLimit } from '../lib/rate-limit';
+import { testCompanyEmailSettings } from '../services/email';
 
 const router = Router();
 
@@ -27,6 +28,16 @@ function parseOptionalBoolean(value: unknown) {
     }
   }
   throw new AppError('Permission flags must be true or false', 400);
+}
+
+function normalizeSmtpSecure(port: number, secure: boolean) {
+  if (port === 465) {
+    return true;
+  }
+  if (port === 587) {
+    return false;
+  }
+  return secure;
 }
 
 function resolveCompanyId(req: import('express').Request) {
@@ -243,14 +254,23 @@ router.get(
       company_id: string;
       sender_name: string | null;
       sender_email: string | null;
+      reply_to_name: string | null;
+      reply_to_email: string | null;
       smtp_host: string | null;
       smtp_port: number | null;
       smtp_secure: boolean | null;
+      smtp_allow_invalid_certs: boolean | null;
       smtp_user: string | null;
       enabled: boolean | null;
+      email_subject_template: string | null;
+      email_body_template: string | null;
+      brand_logo_url: string | null;
+      brand_primary_color: string | null;
       updated_at: string | null;
     }>(
-      `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_user, enabled, updated_at
+      `SELECT company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port,
+              smtp_secure, smtp_allow_invalid_certs, smtp_user, enabled, email_subject_template, email_body_template,
+              brand_logo_url, brand_primary_color, updated_at
        FROM company_email_settings
        WHERE company_id = $1`,
       [companyId]
@@ -264,16 +284,23 @@ router.get(
       },
       settings: settings
         ? {
-            companyId: settings.company_id,
-            senderName: settings.sender_name,
-            senderEmail: settings.sender_email,
-            smtpHost: settings.smtp_host,
-            smtpPort: settings.smtp_port,
-            smtpSecure: settings.smtp_secure,
-            smtpUser: settings.smtp_user,
-            enabled: settings.enabled,
-            updatedAt: settings.updated_at
-          }
+          companyId: settings.company_id,
+          senderName: settings.sender_name,
+          senderEmail: settings.sender_email,
+          replyToName: settings.reply_to_name,
+          replyToEmail: settings.reply_to_email,
+          smtpHost: settings.smtp_host,
+          smtpPort: settings.smtp_port,
+          smtpSecure: settings.smtp_secure,
+          smtpAllowInvalidCerts: settings.smtp_allow_invalid_certs,
+          smtpUser: settings.smtp_user,
+          enabled: settings.enabled,
+          emailSubjectTemplate: settings.email_subject_template,
+          emailBodyTemplate: settings.email_body_template,
+          brandLogoUrl: settings.brand_logo_url,
+          brandPrimaryColor: settings.brand_primary_color,
+          updatedAt: settings.updated_at
+        }
         : null
     });
   })
@@ -284,28 +311,6 @@ router.patch(
   requireAuth,
   asyncHandler(async (req, res) => {
     const companyId = resolveCompanyId(req);
-    const senderName = String(req.body.senderName ?? '').trim() || null;
-    const senderEmail = String(req.body.senderEmail ?? '').trim() || null;
-    const smtpHost = String(req.body.smtpHost ?? '').trim() || null;
-    const smtpPort = Number(req.body.smtpPort ?? 587);
-    const smtpSecure = Boolean(req.body.smtpSecure);
-    const smtpUser = String(req.body.smtpUser ?? '').trim() || null;
-    const smtpPass = String(req.body.smtpPass ?? '').trim() || null;
-    const enabled = Boolean(req.body.enabled);
-
-    if (!senderEmail) {
-      throw new AppError('Sender email is required', 400);
-    }
-    if (!smtpHost) {
-      throw new AppError('SMTP host is required', 400);
-    }
-    if (!Number.isFinite(smtpPort) || smtpPort <= 0) {
-      throw new AppError('SMTP port must be a positive number', 400);
-    }
-    if (enabled && !smtpUser) {
-      throw new AppError('SMTP username is required when sender is enabled', 400);
-    }
-
     const company = await pool.query<{ id: string; name: string }>('SELECT id, name FROM companies WHERE id = $1', [
       companyId
     ]);
@@ -313,37 +318,82 @@ router.patch(
       throw new AppError('Company not found', 404);
     }
 
+    const senderName = String(req.body.senderName ?? '').trim() || company.rows[0].name;
+    const senderEmail = String(req.body.senderEmail ?? '').trim() || null;
+    const replyToName = String(req.body.replyToName ?? '').trim() || null;
+    const replyToEmail = String(req.body.replyToEmail ?? '').trim() || null;
+    const smtpHost = String(req.body.smtpHost ?? '').trim() || null;
+    let smtpPort = Number(req.body.smtpPort);
+    if (!Number.isFinite(smtpPort) || smtpPort <= 0) {
+      smtpPort = 587;
+    }
+    const smtpSecure = Boolean(req.body.smtpSecure);
+    const normalizedSmtpSecure = normalizeSmtpSecure(smtpPort, smtpSecure);
+    const smtpAllowInvalidCerts = parseOptionalBoolean(req.body.smtpAllowInvalidCerts) ?? false;
+    const smtpUser = String(req.body.smtpUser ?? '').trim() || null;
+    const smtpPass = String(req.body.smtpPass ?? '').trim() || null;
+    const emailSubjectTemplate = String(req.body.emailSubjectTemplate ?? '').trim() || null;
+    const emailBodyTemplate = String(req.body.emailBodyTemplate ?? '').trim() || null;
+    const brandLogoUrl = String(req.body.brandLogoUrl ?? '').trim() || null;
+    const brandPrimaryColor = String(req.body.brandPrimaryColor ?? '').trim() || null;
+
     const existing = await pool.query<{ smtp_pass: string | null }>(
       'SELECT smtp_pass FROM company_email_settings WHERE company_id = $1',
       [companyId]
     );
 
     const password = smtpPass || existing.rows[0]?.smtp_pass || null;
-    if (enabled && !password) {
-      throw new AppError('SMTP password is required when sender is enabled', 400);
-    }
+    const enabled = Boolean(senderEmail && smtpHost && smtpUser && password);
 
     const saved = await pool.query(
       `INSERT INTO company_email_settings (
-         company_id, sender_name, sender_email, smtp_host, smtp_port,
-         smtp_secure, smtp_user, smtp_pass, enabled, updated_at
+         company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port,
+         smtp_secure, smtp_allow_invalid_certs, smtp_user, smtp_pass, enabled, email_subject_template, email_body_template,
+         brand_logo_url, brand_primary_color, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
        ON CONFLICT (company_id)
        DO UPDATE SET
          sender_name = EXCLUDED.sender_name,
          sender_email = EXCLUDED.sender_email,
+         reply_to_name = EXCLUDED.reply_to_name,
+         reply_to_email = EXCLUDED.reply_to_email,
          smtp_host = EXCLUDED.smtp_host,
          smtp_port = EXCLUDED.smtp_port,
          smtp_secure = EXCLUDED.smtp_secure,
+         smtp_allow_invalid_certs = EXCLUDED.smtp_allow_invalid_certs,
          smtp_user = EXCLUDED.smtp_user,
          smtp_pass = EXCLUDED.smtp_pass,
          enabled = EXCLUDED.enabled,
+         email_subject_template = EXCLUDED.email_subject_template,
+         email_body_template = EXCLUDED.email_body_template,
+         brand_logo_url = EXCLUDED.brand_logo_url,
+         brand_primary_color = EXCLUDED.brand_primary_color,
          updated_at = NOW()
        RETURNING company_id AS "companyId", sender_name AS "senderName", sender_email AS "senderEmail",
+                 reply_to_name AS "replyToName", reply_to_email AS "replyToEmail",
                  smtp_host AS "smtpHost", smtp_port AS "smtpPort", smtp_secure AS "smtpSecure",
-                 smtp_user AS "smtpUser", enabled, updated_at AS "updatedAt"` ,
-      [companyId, senderName, senderEmail, smtpHost, smtpPort, smtpSecure, smtpUser, password, enabled]
+                 smtp_allow_invalid_certs AS "smtpAllowInvalidCerts", smtp_user AS "smtpUser", enabled, email_subject_template AS "emailSubjectTemplate",
+                 email_body_template AS "emailBodyTemplate", brand_logo_url AS "brandLogoUrl",
+                 brand_primary_color AS "brandPrimaryColor", updated_at AS "updatedAt"` ,
+      [
+        companyId,
+        senderName,
+        senderEmail,
+        replyToName,
+        replyToEmail,
+        smtpHost,
+        smtpPort,
+        normalizedSmtpSecure,
+        smtpAllowInvalidCerts,
+        smtpUser,
+        password,
+        enabled,
+        emailSubjectTemplate,
+        emailBodyTemplate,
+        brandLogoUrl,
+        brandPrimaryColor
+      ]
     );
 
     res.json({
@@ -352,6 +402,27 @@ router.patch(
         companyName: company.rows[0].name
       },
       settings: saved.rows[0]
+    });
+  })
+);
+
+router.post(
+  '/email-settings/test',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const companyId = resolveCompanyId(req);
+    const company = await pool.query<{ id: string; name: string }>('SELECT id, name FROM companies WHERE id = $1', [
+      companyId
+    ]);
+    if (!company.rows[0]) {
+      throw new AppError('Company not found', 404);
+    }
+
+    await testCompanyEmailSettings(companyId);
+
+    res.json({
+      ok: true,
+      message: 'SMTP login test succeeded'
     });
   })
 );

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
 import { randomUUID } from 'crypto';
+import { PDFDocument } from 'pdf-lib';
 import { pool, withTransaction } from '../db/pool';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
@@ -9,6 +10,7 @@ import { ensureDir, safeSegment } from './fs';
 
 export type CertificateFieldConfig = {
   field: string;
+  pageNumber?: number;
   x: number;
   y: number;
   width: number;
@@ -64,6 +66,28 @@ function normalizeIssueDateMode(value: CertificateIssueDateMode | string | null 
 
 function normalizeIssueDateValue(value: string | null | undefined) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+async function getBackgroundDimensions(storedPath: string) {
+  const ext = path.extname(storedPath).toLowerCase();
+  if (ext === '.pdf') {
+    const pdfBytes = await fs.readFile(storedPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const firstPage = pdfDoc.getPages()[0];
+    if (!firstPage) {
+      return { width: 1200, height: 800 };
+    }
+    return {
+      width: Math.round(firstPage.getWidth()),
+      height: Math.round(firstPage.getHeight())
+    };
+  }
+
+  const metadata = await sharp(storedPath).metadata();
+  return {
+    width: metadata.width ?? 1200,
+    height: metadata.height ?? 800
+  };
 }
 
 function mapTemplateRow(row: CertificateTemplateRow) {
@@ -159,14 +183,15 @@ export async function createCertificateTemplate(params: {
   const storedName = `${safeSegment(path.basename(params.backgroundOriginalName, ext)) || 'certificate'}${ext}`;
   const storedPath = path.join(uploadRoot, `${Date.now()}-${storedName}`);
   await fs.copyFile(params.backgroundFilePath, storedPath);
-  const metadata = await sharp(storedPath).metadata();
+  const metadata = await getBackgroundDimensions(storedPath);
+  const uploadKind = ext === '.pdf' ? 'pdf' : 'image';
 
   return withTransaction(async (client) => {
     const upload = await client.query<{ id: string }>(
       `INSERT INTO uploads (company_id, original_name, stored_path, kind, created_by)
-       VALUES ($1, $2, $3, 'image', $4)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [params.companyId, params.backgroundOriginalName, storedPath, params.createdBy]
+      [params.companyId, params.backgroundOriginalName, storedPath, uploadKind, params.createdBy]
     );
 
     if (params.isActive !== false) {
@@ -285,15 +310,26 @@ export async function deleteCertificateTemplate(params: { templateId: string; co
     throw new AppError('Certificate template not found', 404);
   }
 
+  let shouldDeleteBackgroundUpload = false;
+
   await withTransaction(async (client) => {
     await client.query('DELETE FROM certificate_templates WHERE id = $1 AND company_id = $2', [
       params.templateId,
       params.companyId
     ]);
-    await client.query('DELETE FROM uploads WHERE id = $1', [current.backgroundUploadId]);
+
+    const referenceCheck = await client.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM batches WHERE template_upload_id = $1',
+      [current.backgroundUploadId]
+    );
+    shouldDeleteBackgroundUpload = Number(referenceCheck.rows[0]?.count ?? '0') === 0;
+
+    if (shouldDeleteBackgroundUpload) {
+      await client.query('DELETE FROM uploads WHERE id = $1', [current.backgroundUploadId]);
+    }
   });
 
-  if (current.backgroundStoredPath) {
+  if (shouldDeleteBackgroundUpload && current.backgroundStoredPath) {
     await fs.rm(current.backgroundStoredPath, { force: true }).catch(() => undefined);
   }
 }

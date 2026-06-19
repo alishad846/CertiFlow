@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
+import { CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { apiUrl } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
+import { getTemplatePreviewSrc } from '@/lib/template-preview';
 import type { CertificateFieldConfig, CertificateIssueDateMode } from '@/types/certificate';
 
 const supportedFields = [
@@ -26,11 +27,22 @@ const defaultFieldStyle: CertificateFieldConfig = {
   field: 'name',
   x: 200,
   y: 200,
-  width: 320,
+  width: 180,
   fontSize: 36,
   fontFamily: 'Poppins',
   color: '#111111',
   align: 'center'
+};
+
+type EditorFieldConfig = CertificateFieldConfig & {
+  id: string;
+};
+
+type PreviewPage = {
+  pageNumber: number;
+  width: number;
+  height: number;
+  src: string;
 };
 
 function clampFontSize(value: number) {
@@ -45,6 +57,36 @@ function createUniqueFieldName(prefix: string, fields: CertificateFieldConfig[])
     candidate = `${prefix}_${index}`;
   }
   return candidate;
+}
+
+function createEditorFieldId(fieldName: string, index: number) {
+  const safeFieldName = fieldName.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'field';
+  return `${safeFieldName}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeEditorFields(fields: CertificateFieldConfig[]) {
+  return fields.map((field, index) => {
+    const existingId = (field as CertificateFieldConfig & { id?: string }).id?.trim();
+    return {
+      ...field,
+      pageNumber: field.pageNumber ?? 1,
+      id: existingId || createEditorFieldId(field.field, index)
+    };
+  });
+}
+
+function stripEditorFieldIds(fields: EditorFieldConfig[]) {
+  return fields.map(({ id, ...field }) => field);
+}
+
+function getPlaceholderFieldWidth(fieldName: string) {
+  const displayName = fieldName.replace(/_/g, ' ');
+  return Math.max(140, Math.min(260, 96 + displayName.length * 12));
+}
+
+function getFreeTextFieldWidth(text: string) {
+  const longestLine = text.split('\n').reduce((max, line) => Math.max(max, line.length), 0);
+  return Math.max(140, Math.min(360, 48 + longestLine * 10));
 }
 
 function formatIssueDate(value: string) {
@@ -86,17 +128,16 @@ export function CertificateEditor({
 }: CertificateEditorProps) {
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const toolsPanelRef = useRef<HTMLDivElement | null>(null);
-  const toolsToggleRef = useRef<HTMLButtonElement | null>(null);
-  const [toolsExpanded, setToolsExpanded] = useState(false);
   const [name, setName] = useState(template.name);
-  const [fields, setFields] = useState<CertificateFieldConfig[]>(template.fieldConfig.length ? template.fieldConfig : []);
-  const [selectedField, setSelectedField] = useState<string | null>(template.fieldConfig[0]?.field ?? null);
+  const [fields, setFields] = useState<EditorFieldConfig[]>([]);
+  const [selectedField, setSelectedField] = useState<string | null>(null);
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
   const [customFieldName, setCustomFieldName] = useState('');
   const [customTextValue, setCustomTextValue] = useState(DEFAULT_FREE_TEXT);
+  const [previewPages, setPreviewPages] = useState<PreviewPage[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [activePage, setActivePage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -104,19 +145,68 @@ export function CertificateEditor({
   const [saveMessage, setSaveMessage] = useState('');
   const [dragState, setDragState] = useState<{
     field: string;
+    pageNumber: number;
     offsetX: number;
     offsetY: number;
   } | null>(null);
+  const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
     setName(template.name);
-    setFields(template.fieldConfig.length ? template.fieldConfig : []);
-    setSelectedField(template.fieldConfig[0]?.field ?? null);
+    const nextFields = template.fieldConfig.length ? normalizeEditorFields(template.fieldConfig) : [];
+    setFields(nextFields);
+    setSelectedField(nextFields[0]?.id ?? null);
+    setActivePage(1);
     setIssueDateMode(template.issueDateMode ?? 'current_date');
     setIssueDateValue(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
     setSaveState('idle');
     setSaveMessage('');
   }, [template]);
+
+  useEffect(() => {
+    let active = true;
+    pageRefs.current = [];
+
+    if (!template.backgroundUrl.toLowerCase().endsWith('.pdf')) {
+      setPreviewPages([]);
+      setPreviewLoading(false);
+      setActivePage(1);
+      return () => {
+        active = false;
+      };
+    }
+
+    setPreviewLoading(true);
+    apiFetch<{ pages: Array<{ pageNumber: number; width: number; height: number; src: string }> }>(
+      `/certificate-templates/${template.id}/preview-pages`
+    )
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setPreviewPages(
+          data.pages.map((page) => ({
+            ...page,
+            src: `${apiUrl}${page.src}`
+          }))
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setPreviewPages([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setPreviewLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [template.backgroundUrl, template.id]);
 
   useEffect(() => {
     if (saveState === 'idle') {
@@ -137,7 +227,7 @@ export function CertificateEditor({
     }
 
     const handleMove = (event: PointerEvent) => {
-      const container = containerRef.current;
+      const container = pageRefs.current[dragState.pageNumber];
       if (!container) {
         return;
       }
@@ -148,7 +238,7 @@ export function CertificateEditor({
       const nextY = Math.max(0, pointerY - dragState.offsetY);
       setFields((current) =>
         current.map((field) =>
-          field.field === dragState.field
+          field.id === dragState.field
             ? {
                 ...field,
                 x: nextX,
@@ -182,7 +272,7 @@ export function CertificateEditor({
         event.preventDefault();
         setFields((current) =>
           current.map((field) =>
-            field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + FONT_SIZE_STEP) } : field
+            field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + FONT_SIZE_STEP) } : field
           )
         );
       }
@@ -191,7 +281,7 @@ export function CertificateEditor({
         event.preventDefault();
         setFields((current) =>
           current.map((field) =>
-            field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize - FONT_SIZE_STEP) } : field
+            field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize - FONT_SIZE_STEP) } : field
           )
         );
       }
@@ -203,39 +293,32 @@ export function CertificateEditor({
     };
   }, [selectedField]);
 
-  useEffect(() => {
-    if (!toolsExpanded) {
-      return;
-    }
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (toolsPanelRef.current?.contains(target)) {
-        return;
-      }
-      if (toolsToggleRef.current?.contains(target)) {
-        return;
-      }
-      setToolsExpanded(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setToolsExpanded(false);
-      }
-    };
-
-    document.addEventListener('click', handleDocumentClick);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [toolsExpanded]);
-
-  const stageWidth = template.imageWidth || 1200;
-  const stageHeight = template.imageHeight || 800;
+  const selected = useMemo(() => fields.find((field) => field.id === selectedField) ?? null, [fields, selectedField]);
+  const displayZoom = zoom * fitZoom;
+  const previewSrc = getTemplatePreviewSrc(template);
+  const isPdfTemplate = template.backgroundUrl.toLowerCase().endsWith('.pdf');
+  const pagesToRender: PreviewPage[] = isPdfTemplate
+    ? previewPages.length
+      ? previewPages
+      : [
+          {
+            pageNumber: 1,
+            width: template.imageWidth ?? 1200,
+            height: template.imageHeight ?? 800,
+            src: previewSrc
+          }
+        ]
+    : [
+        {
+          pageNumber: 1,
+          width: template.imageWidth ?? 1200,
+          height: template.imageHeight ?? 800,
+          src: previewSrc
+        }
+      ];
+  const activePreviewPage = pagesToRender.find((page) => page.pageNumber === activePage) ?? pagesToRender[0];
+  const stageWidth = activePreviewPage?.width ?? template.imageWidth ?? 1200;
+  const stageHeight = activePreviewPage?.height ?? template.imageHeight ?? 800;
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -290,8 +373,6 @@ export function CertificateEditor({
     };
   }, [selectedField]);
 
-  const selected = useMemo(() => fields.find((field) => field.field === selectedField) ?? null, [fields, selectedField]);
-  const displayZoom = zoom * fitZoom;
   const resolvedIssueDate = useMemo(() => {
     if (issueDateMode === 'manual' && issueDateValue) {
       return formatIssueDate(issueDateValue);
@@ -299,8 +380,8 @@ export function CertificateEditor({
     return formatIssueDate(new Date().toISOString().slice(0, 10));
   }, [issueDateMode, issueDateValue]);
 
-  const updateField = (fieldName: string, patch: Partial<CertificateFieldConfig>) => {
-    setFields((current) => current.map((field) => (field.field === fieldName ? { ...field, ...patch } : field)));
+  const updateField = (fieldId: string, patch: Partial<CertificateFieldConfig>) => {
+    setFields((current) => current.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
   };
 
   const addField = (fieldName: string) => {
@@ -308,43 +389,40 @@ export function CertificateEditor({
     if (!normalizedField) {
       return;
     }
-    setFields((current) => {
-      if (current.some((field) => field.field === normalizedField)) {
-        setSelectedField(normalizedField);
-        return current;
-      }
+    const id = createEditorFieldId(normalizedField, fields.length);
+    const nextField: EditorFieldConfig = {
+      ...defaultFieldStyle,
+      id,
+      field: normalizedField,
+      pageNumber: activePage,
+      x: Math.max(80, stageWidth / 2 - 160),
+      y: Math.max(80, stageHeight / 2 - 40),
+      width: getPlaceholderFieldWidth(normalizedField)
+    };
 
-      const nextField: CertificateFieldConfig = {
-        ...defaultFieldStyle,
-        field: normalizedField,
-        x: Math.max(80, stageWidth / 2 - 160),
-        y: Math.max(80, stageHeight / 2 - 40),
-        width: 320
-      };
-
-      setSelectedField(normalizedField);
-      return [...current, nextField];
-    });
+    setSelectedField(id);
+    setFields((current) => [...current, nextField]);
   };
 
   const addFreeTextField = (text: string) => {
     const trimmedText = text.trim();
     const nextText = trimmedText || DEFAULT_FREE_TEXT;
+    const id = createEditorFieldId('text', fields.length);
 
-    setFields((current) => {
-      const fieldName = createUniqueFieldName('text', current);
-      const nextField: CertificateFieldConfig = {
-        ...defaultFieldStyle,
-        field: fieldName,
-        text: nextText,
-        x: Math.max(80, stageWidth / 2 - 160),
-        y: Math.max(80, stageHeight / 2 - 40),
-        width: Math.max(280, nextText.length * 12)
-      };
+    const fieldName = createUniqueFieldName('text', fields);
+    const nextField: EditorFieldConfig = {
+      ...defaultFieldStyle,
+      id,
+      field: fieldName,
+      pageNumber: activePage,
+      text: nextText,
+      x: Math.max(80, stageWidth / 2 - 160),
+      y: Math.max(80, stageHeight / 2 - 40),
+      width: getFreeTextFieldWidth(nextText)
+    };
 
-      setSelectedField(fieldName);
-      return [...current, nextField];
-    });
+    setSelectedField(id);
+    setFields((current) => [...current, nextField]);
   };
 
   const changeSelectedFontSize = (delta: number) => {
@@ -354,7 +432,7 @@ export function CertificateEditor({
 
     setFields((current) =>
       current.map((field) =>
-        field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + delta) } : field
+        field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + delta) } : field
       )
     );
   };
@@ -363,37 +441,211 @@ export function CertificateEditor({
     if (!selectedField) {
       return;
     }
-    setFields((current) => current.filter((field) => field.field !== selectedField));
+    setFields((current) => current.filter((field) => field.id !== selectedField));
     setSelectedField(null);
   };
 
   return (
     <div
       ref={editorRootRef}
-      className="relative grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]"
+      className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start"
     >
-      <button
-        ref={toolsToggleRef}
-        type="button"
-        aria-label={toolsExpanded ? 'Collapse tools' : 'Expand tools'}
-        onClick={() => setToolsExpanded((current) => !current)}
-        className={`fixed left-3 top-1/2 z-50 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.12)] transition-transform duration-300 hover:bg-slate-50 ${
-          toolsExpanded ? 'translate-x-[248px]' : 'translate-x-0'
-        }`}
-      >
-        {toolsExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-      </button>
+      <section className="order-2 min-w-0 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] xl:sticky xl:top-6 xl:order-1 xl:self-start">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Input value={name} onChange={(event) => setName(event.target.value)} className="sm:max-w-sm" placeholder="Template name" />
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={async () => {
+              setSaving(true);
+              setSaveState('idle');
+              setSaveMessage('');
+              try {
+                await onSave({
+                  name,
+                  fieldConfig: stripEditorFieldIds(fields),
+                  issueDateMode,
+                  issueDateValue: issueDateMode === 'manual' ? issueDateValue : null
+                });
+                setSaveState('saved');
+                setSaveMessage('Template saved successfully.');
+              } catch (error) {
+                setSaveState('error');
+                setSaveMessage(error instanceof Error ? error.message : 'Failed to save template.');
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save template'}
+          </Button>
+        </div>
 
-      <aside
-        ref={toolsPanelRef}
-        className={`fixed inset-y-4 left-3 z-40 w-[260px] max-w-[calc(100vw-1.5rem)] rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)] transition-[transform,opacity] duration-300 ease-out ${
-          toolsExpanded
-            ? 'translate-x-0 opacity-100 pointer-events-auto'
-            : '-translate-x-[calc(100%+0.75rem)] opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Placeholders</p>
+        {saveMessage ? (
+          <div
+            className={`mb-4 flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm ${
+              saveState === 'saved'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-rose-200 bg-rose-50 text-rose-700'
+            }`}
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>{saveMessage}</span>
+          </div>
+        ) : null}
+
+        <div
+          ref={canvasViewportRef}
+          className="w-full overflow-auto rounded-[24px] border border-slate-200 bg-slate-100"
+          style={{ minHeight: 'calc(100vh - 220px)', maxHeight: 'calc(100vh - 220px)' }}
+        >
+          <div className="space-y-4 p-4">
+            {previewLoading ? (
+              <div className="rounded-[18px] border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+                Loading PDF pages...
+              </div>
+            ) : null}
+            {pagesToRender.map((page) => {
+              const pageFields = fields.filter((field) => (field.pageNumber ?? 1) === page.pageNumber);
+              const isActivePage = activePage === page.pageNumber;
+              return (
+              <div
+                key={page.pageNumber}
+                ref={(element) => {
+                  pageRefs.current[page.pageNumber] = element;
+                }}
+                onPointerDown={() => setActivePage(page.pageNumber)}
+                className={`relative overflow-hidden rounded-[18px] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
+                  isActivePage ? 'border-2 border-accent-500' : 'border border-slate-300'
+                }`}
+                style={{
+                  width: page.width * displayZoom,
+                  height: page.height * displayZoom
+                }}
+              >
+                <img
+                  src={page.src}
+                  alt={`${template.name} page ${page.pageNumber}`}
+                  className="absolute inset-0 h-full w-full select-none object-fill"
+                  draggable={false}
+                />
+
+                <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">
+                  Page {page.pageNumber}
+                </div>
+
+                {pageFields.map((field) => {
+                  const isSelected = field.id === selectedField;
+                  const isIssueDate = field.field === 'issue_date';
+                  const isFreeText = typeof field.text === 'string';
+                  const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
+                  return (
+                    <div
+                      key={`${page.pageNumber}-${field.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setSelectedField(field.id);
+                        setActivePage(field.pageNumber ?? 1);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          setSelectedField(field.id);
+                          setActivePage(field.pageNumber ?? 1);
+                        }
+                      }}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
+                        if (!rect) {
+                          return;
+                        }
+                        const pointerX = (event.clientX - rect.left) / displayZoom;
+                        const pointerY = (event.clientY - rect.top) / displayZoom;
+                        setSelectedField(field.id);
+                        setDragState({
+                          field: field.id,
+                          pageNumber: page.pageNumber,
+                          offsetX: pointerX - field.x,
+                          offsetY: pointerY - field.y
+                        });
+                      }}
+                      className={`absolute cursor-move select-none rounded-md px-1 py-0.5 transition ${
+                        isSelected
+                          ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent'
+                          : 'hover:ring-1 hover:ring-accent-200'
+                      }`}
+                      style={{
+                        left: field.x * displayZoom,
+                        top: field.y * displayZoom,
+                        width: field.width * displayZoom,
+                        fontSize: field.fontSize * displayZoom,
+                        color: field.color,
+                        fontFamily: field.fontFamily,
+                        textAlign: field.align,
+                        lineHeight: 1.1
+                      }}
+                    >
+                      {isSelected ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeSelected();
+                          }}
+                          className="absolute -right-3 -top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-md transition hover:bg-red-50"
+                          aria-label={`Remove ${field.field}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                      <span
+                        className={`pointer-events-none block bg-white/0 ${
+                          isFreeText ? 'whitespace-pre-wrap break-words' : 'whitespace-nowrap'
+                        }`}
+                      >
+                        {displayText}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <aside className="order-1 min-w-0 space-y-6 xl:order-2">
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Editing tools</p>
+              <p className="mt-1 text-xs font-medium text-slate-400">Drag, add, edit</p>
+            </div>
+          </div>
+
+          {pagesToRender.length > 1 ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Placement page</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {pagesToRender.map((page) => (
+                  <button
+                    key={page.pageNumber}
+                    type="button"
+                    onClick={() => setActivePage(page.pageNumber)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                      activePage === page.pageNumber ? 'bg-ink text-white' : 'bg-white text-slate-600'
+                    }`}
+                  >
+                    Page {page.pageNumber}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-4 space-y-2">
             {supportedFields.map((item) => (
               <button
@@ -478,149 +730,9 @@ export function CertificateEditor({
             Dynamic placeholders must match your Excel column headers exactly. Free text fields do not need Excel data, and
             both types work best when you keep the spelling and format consistent.
           </p>
-        </div>
-      </aside>
+        </section>
 
-      <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)]">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <Input value={name} onChange={(event) => setName(event.target.value)} className="sm:max-w-sm" placeholder="Template name" />
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            onClick={async () => {
-              setSaving(true);
-              setSaveState('idle');
-              setSaveMessage('');
-              try {
-                await onSave({
-                  name,
-                  fieldConfig: fields,
-                  issueDateMode,
-                  issueDateValue: issueDateMode === 'manual' ? issueDateValue : null
-                });
-                setSaveState('saved');
-                setSaveMessage('Template saved successfully.');
-              } catch (error) {
-                setSaveState('error');
-                setSaveMessage(error instanceof Error ? error.message : 'Failed to save template.');
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {saving ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save template'}
-          </Button>
-        </div>
-
-        {saveMessage ? (
-          <div
-            className={`mb-4 flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm ${
-              saveState === 'saved'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-700'
-            }`}
-          >
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>{saveMessage}</span>
-          </div>
-        ) : null}
-
-        <div
-          ref={canvasViewportRef}
-          className="w-full overflow-x-auto overflow-y-hidden rounded-[24px] border border-slate-200 bg-slate-100"
-          style={{ minHeight: 'calc(100vh - 220px)' }}
-        >
-          <div
-            ref={containerRef}
-            className="relative overflow-hidden"
-            style={{
-              width: stageWidth * displayZoom,
-              height: stageHeight * displayZoom
-            }}
-          >
-            {template.backgroundUrl ? (
-              <img
-                src={`${apiUrl}${template.backgroundUrl}`}
-                alt={template.name}
-                className="absolute inset-0 h-full w-full select-none object-fill"
-                draggable={false}
-              />
-            ) : null}
-
-            {fields.map((field) => {
-              const isSelected = field.field === selectedField;
-              const isIssueDate = field.field === 'issue_date';
-              const isFreeText = typeof field.text === 'string';
-              const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
-              return (
-                <div
-                  key={field.field}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedField(field.field)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      setSelectedField(field.field);
-                    }
-                  }}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    const rect = containerRef.current?.getBoundingClientRect();
-                    if (!rect) {
-                      return;
-                    }
-                    const pointerX = (event.clientX - rect.left) / displayZoom;
-                    const pointerY = (event.clientY - rect.top) / displayZoom;
-                    setSelectedField(field.field);
-                    setDragState({
-                      field: field.field,
-                      offsetX: pointerX - field.x,
-                      offsetY: pointerY - field.y
-                    });
-                  }}
-                  className={`absolute cursor-move select-none rounded-md px-1 py-0.5 transition ${
-                    isSelected ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent' : 'hover:ring-1 hover:ring-accent-200'
-                  }`}
-                  style={{
-                    left: field.x * displayZoom,
-                    top: field.y * displayZoom,
-                    width: field.width * displayZoom,
-                    fontSize: field.fontSize * displayZoom,
-                    color: field.color,
-                    fontFamily: field.fontFamily,
-                    textAlign: field.align,
-                    lineHeight: 1.1
-                  }}
-                >
-                  {isSelected ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeSelected();
-                      }}
-                      className="absolute -right-3 -top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-md transition hover:bg-red-50"
-                      aria-label={`Remove ${field.field}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                  <span
-                    className={`pointer-events-none block bg-white/0 ${
-                      isFreeText ? 'whitespace-pre-wrap break-words' : 'whitespace-nowrap'
-                    }`}
-                  >
-                    {displayText}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <aside className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)]">
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)]">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Selected</p>
@@ -642,12 +754,32 @@ export function CertificateEditor({
 
         {selected ? (
           <div className="mt-5 space-y-4">
+            {pagesToRender.length > 1 ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Page</label>
+                <select
+                  value={selected.pageNumber ?? 1}
+                  onChange={(event) => {
+                    const nextPageNumber = Number(event.target.value);
+                    updateField(selected.id, { pageNumber: nextPageNumber });
+                    setActivePage(nextPageNumber);
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                >
+                  {pagesToRender.map((page) => (
+                    <option key={page.pageNumber} value={page.pageNumber}>
+                      Page {page.pageNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {selected.text !== undefined ? (
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Text content</label>
                 <textarea
                   value={selected.text}
-                  onChange={(event) => updateField(selected.field, { text: event.target.value })}
+                  onChange={(event) => updateField(selected.id, { text: event.target.value })}
                   rows={4}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-accent-400 focus:ring-4 focus:ring-accent-100"
                 />
@@ -696,7 +828,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.x}
-                onChange={(event) => updateField(selected.field, { x: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { x: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -704,7 +836,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.y}
-                onChange={(event) => updateField(selected.field, { y: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { y: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -712,7 +844,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.width}
-                onChange={(event) => updateField(selected.field, { width: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { width: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -720,14 +852,14 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.fontSize}
-                onChange={(event) => updateField(selected.field, { fontSize: clampFontSize(Number(event.target.value)) })}
+                onChange={(event) => updateField(selected.id, { fontSize: clampFontSize(Number(event.target.value)) })}
               />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font family</label>
               <select
                 value={selected.fontFamily}
-                onChange={(event) => updateField(selected.field, { fontFamily: event.target.value })}
+                onChange={(event) => updateField(selected.id, { fontFamily: event.target.value })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
               >
                 <option value="Poppins">Poppins</option>
@@ -741,7 +873,7 @@ export function CertificateEditor({
               <Input
                 type="color"
                 value={selected.color}
-                onChange={(event) => updateField(selected.field, { color: event.target.value })}
+                onChange={(event) => updateField(selected.id, { color: event.target.value })}
                 className="h-12 p-1"
               />
             </div>
@@ -749,7 +881,7 @@ export function CertificateEditor({
               <label className="mb-2 block text-sm font-medium text-slate-700">Align</label>
               <select
                 value={selected.align}
-                onChange={(event) => updateField(selected.field, { align: event.target.value as CertificateFieldConfig['align'] })}
+                onChange={(event) => updateField(selected.id, { align: event.target.value as CertificateFieldConfig['align'] })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
               >
                 <option value="left">Left</option>
@@ -758,9 +890,10 @@ export function CertificateEditor({
               </select>
             </div>
           </div>
-        ) : (
-          <p className="mt-5 text-sm leading-6 text-slate-500">Click a placeholder to place it on the certificate, then drag it where you want it.</p>
-        )}
+          ) : (
+            <p className="mt-5 text-sm leading-6 text-slate-500">Click a placeholder to place it on the certificate, then drag it where you want it.</p>
+          )}
+        </section>
       </aside>
     </div>
   );

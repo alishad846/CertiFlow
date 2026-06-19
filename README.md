@@ -43,6 +43,18 @@ docker compose up -d postgres redis
 npm run dev
 ```
 
+## Config Split
+
+- Keep shared infrastructure values in `.env`:
+  - `DATABASE_URL`
+  - `REDIS_URL`
+  - `JWT_SECRET`
+  - `RESEND_*` and `N8N_WEBHOOK_URL` if you use those providers
+- Keep tenant-specific values in the database:
+  - `company_email_settings` for sender, reply-to, branding, and email templates
+  - `companies` for credits, status, and permissions
+  - `company_discounts` and `credit_ledger` for per-company billing rules and usage
+
 ## API
 
 The backend runs on `http://localhost:4000`.
@@ -70,6 +82,14 @@ The DOCX template is treated as a design file. CertiFlow only replaces placehold
 - `{{roll_number}}`
 
 It does not modify fonts, spacing, logos, borders, alignment, or layout.
+
+## PDF Placeholder Rules
+
+PDF templates also support placeholders like `{{name}}`, but only when the PDF contains selectable text in the text layer.
+
+- Placeholders must be part of the actual PDF text, not a flattened scan or image.
+- The PDF can be used as a batch template or as an attachment template.
+- If the PDF is image-only, CertiFlow can still overlay text, but it cannot rewrite the original text inside the PDF.
 
 ## Queue Flow
 

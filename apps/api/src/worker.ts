@@ -25,8 +25,14 @@ async function main() {
   batchWorker.on('failed', (job, error) => {
     console.error(`Batch job failed: ${job?.id}`, error);
   });
+  batchWorker.on('error', (err) => {
+    // Gracefully handled; connection level logs the failure warning
+  });
   emailWorker.on('failed', (job, error) => {
     console.error(`Email job failed: ${job?.id}`, error);
+  });
+  emailWorker.on('error', (err) => {
+    // Gracefully handled; connection level logs the failure warning
   });
 }
 

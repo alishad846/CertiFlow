@@ -20,7 +20,11 @@ import {
   updateCertificateTemplate
 } from '../services/certificate-templates';
 import { readExcelRecipients, buildTemplateContext } from '../services/excel';
-import { renderCertificatePdfPreview } from '../services/certificate-render';
+import {
+  listCertificateBackgroundPreviewPages,
+  renderCertificateBackgroundPreviewPage,
+  renderCertificatePdfPreview
+} from '../services/certificate-render';
 import { safeSegment } from '../services/fs';
 
 const router = Router();
@@ -38,13 +42,14 @@ const upload = multer({
   }),
   fileFilter: (_req, file, cb) => {
     const allowed = [
+      'application/pdf',
       'image/png',
       'image/jpeg'
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    const isImage = allowed.includes(file.mimetype) || ['.png', '.jpg', '.jpeg'].includes(ext);
-    if (!isImage) {
-      cb(new AppError('Only PNG and JPG files are allowed', 400));
+    const isAllowed = allowed.includes(file.mimetype) || ['.pdf', '.png', '.jpg', '.jpeg'].includes(ext);
+    if (!isAllowed) {
+      cb(new AppError('Only PDF, PNG and JPG files are allowed', 400));
       return;
     }
     cb(null, true);
@@ -86,6 +91,7 @@ const previewUpload = multer({
 const fieldConfigSchema = z.array(
   z.object({
     field: z.string().min(1),
+    pageNumber: z.number().int().positive().optional(),
     x: z.number(),
     y: z.number(),
     width: z.number().positive(),
@@ -100,6 +106,7 @@ const fieldConfigSchema = z.array(
 function parseFieldConfig(value: unknown): CertificateFieldConfig[] {
   return fieldConfigSchema.parse(value).map((entry) => ({
     field: entry.field,
+    ...(entry.pageNumber !== undefined ? { pageNumber: entry.pageNumber } : {}),
     x: entry.x,
     y: entry.y,
     width: entry.width,
@@ -166,6 +173,43 @@ router.get(
       throw new AppError('Forbidden', 403);
     }
     res.json({ template });
+  })
+);
+
+router.get(
+  '/:id/preview-image',
+  asyncHandler(async (req, res) => {
+    const template = await getCertificateTemplateById(String(req.params.id));
+    if (!template) {
+      throw new AppError('Certificate template not found', 404);
+    }
+
+    const pageNumber = Math.max(1, Number(req.query.page ?? '1') || 1);
+    const preview = await renderCertificateBackgroundPreviewPage(template.backgroundStoredPath, pageNumber);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Preview-Width', String(preview.width));
+    res.setHeader('X-Preview-Height', String(preview.height));
+    res.send(preview.buffer);
+  })
+);
+
+router.get(
+  '/:id/preview-pages',
+  asyncHandler(async (req, res) => {
+    const template = await getCertificateTemplateById(String(req.params.id));
+    if (!template) {
+      throw new AppError('Certificate template not found', 404);
+    }
+
+    const pages = await listCertificateBackgroundPreviewPages(template.backgroundStoredPath);
+    res.json({
+      pages: pages.map((page) => ({
+        ...page,
+        src: `/certificate-templates/${template.id}/preview-image?page=${page.pageNumber}`
+      }))
+    });
   })
 );
 
@@ -263,12 +307,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const excelFile = req.file;
     const companyId = await resolveCompanyId(req, String(req.body.companyId ?? '').trim());
+    const requestedTemplateId = String(req.body.certificateTemplateId ?? '').trim();
     if (!excelFile) {
       throw new AppError('Excel file is required', 400);
     }
 
     try {
-      const template = await getActiveCertificateTemplate(companyId);
+      const template = requestedTemplateId
+        ? await getCertificateTemplateById(requestedTemplateId, companyId)
+        : await getActiveCertificateTemplate(companyId);
       if (!template) {
         throw new AppError('Please create a certificate template first', 400);
       }
@@ -287,7 +334,8 @@ router.post(
         }
       });
 
-      res.setHeader('Content-Type', 'image/png');
+      const contentType = path.extname(template.backgroundStoredPath).toLowerCase() === '.pdf' ? 'application/pdf' : 'image/png';
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'no-store');
       res.send(previewBuffer);
     } finally {

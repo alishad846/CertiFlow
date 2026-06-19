@@ -11,7 +11,7 @@ async function main() {
   const app = createApp();
   const port = Number(process.env.PORT ?? env.API_PORT);
   app.listen(port, '0.0.0.0', () => {
-    console.log(`API listening on http://0.0.0.0:${port}`);
+    console.log(`API listening on http://localhost:${port}`);
   });
 }
 

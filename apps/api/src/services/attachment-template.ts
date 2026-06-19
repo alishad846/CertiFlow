@@ -4,6 +4,8 @@ import sharp from 'sharp';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { AppError } from '../lib/errors';
 import { ensureDir, safeSegment } from './fs';
+import { renderTemplateString } from './template-placeholders';
+import { renderPdfTemplate } from './pdf-template';
 
 type TemplateData = Record<string, unknown>;
 
@@ -17,15 +19,7 @@ function escapeXml(value: string) {
 }
 
 function renderTemplateText(template: string, data: TemplateData) {
-  return template
-    .replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_, key: string) => {
-      const value = data[key];
-      if (value === null || value === undefined) {
-        return '';
-      }
-      return String(value);
-    })
-    .trim();
+  return renderTemplateString(template, data).trim();
 }
 
 function wrapText(text: string, maxCharacters: number) {
@@ -155,7 +149,16 @@ export async function renderPersonalizedAttachment(params: {
   const hasOverlay = Boolean(params.overlayTemplate?.trim());
 
   if (!hasOverlay) {
-    await fs.copyFile(params.templatePath, outputPath);
+    if (ext === '.pdf') {
+      await renderPdfTemplate({
+        templatePath: params.templatePath,
+        outputPath,
+        data: params.data
+      });
+    } else {
+      await fs.copyFile(params.templatePath, outputPath);
+    }
+
     return {
       path: outputPath,
       filename: path.basename(outputPath)
@@ -164,12 +167,20 @@ export async function renderPersonalizedAttachment(params: {
 
   try {
     if (ext === '.pdf') {
-      await renderPdfAttachment({
+      const sourcePath = `${outputPath}.rendered.pdf`;
+      await renderPdfTemplate({
         templatePath: params.templatePath,
+        outputPath: sourcePath,
+        data: params.data
+      });
+
+      await renderPdfAttachment({
+        templatePath: sourcePath,
         outputPath,
         data: params.data,
         overlayTemplate: params.overlayTemplate ?? ''
       });
+      await fs.rm(sourcePath, { force: true }).catch(() => undefined);
     } else if (['.png', '.jpg', '.jpeg'].includes(ext)) {
       await renderImageAttachment({
         templatePath: params.templatePath,

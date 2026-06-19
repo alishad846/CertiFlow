@@ -1,5 +1,6 @@
 export type CertificateFieldConfig = {
   field: string;
+  pageNumber?: number;
   x: number;
   y: number;
   width: number;

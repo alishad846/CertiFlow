@@ -8,6 +8,7 @@ import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { createBatch } from '../services/batches';
 import { getCompanyAccess } from '../services/companies';
+import { getCertificateTemplateById } from '../services/certificate-templates';
 import { pool } from '../db/pool';
 import { ensureDir, safeSegment } from '../services/fs';
 
@@ -32,6 +33,10 @@ const upload = multer({
     const allowedDocx = [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
+    const allowedTemplates = [
+      ...allowedDocx,
+      'application/pdf'
+    ];
     const allowedAttachments = [
       'application/pdf',
       'image/png',
@@ -39,22 +44,22 @@ const upload = multer({
     ];
     const ext = path.extname(file.originalname).toLowerCase();
     const isExcel = allowedExcel.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext);
-    const isDocx = allowedDocx.includes(file.mimetype) || ext === '.docx';
+    const isTemplate = allowedTemplates.includes(file.mimetype) || ['.docx', '.pdf'].includes(ext);
     const isAttachment = allowedAttachments.includes(file.mimetype) || ['.pdf', '.png', '.jpg', '.jpeg'].includes(ext);
 
     if (file.fieldname === 'excelFile' && !isExcel) {
       cb(new AppError('Only Excel files are allowed in the Excel field', 400));
       return;
     }
-    if ((file.fieldname === 'templateFile' || file.fieldname === 'templateFiles') && !isDocx) {
-      cb(new AppError('Only DOCX files are allowed in the template field', 400));
+    if ((file.fieldname === 'templateFile' || file.fieldname === 'templateFiles') && !isTemplate) {
+      cb(new AppError('Only DOCX or PDF files are allowed in the template field', 400));
       return;
     }
     if (file.fieldname === 'attachments' && !isAttachment) {
       cb(new AppError('Only PDF, PNG, JPG, and JPEG files are allowed in the attachment field', 400));
       return;
     }
-    if (!isExcel && !isDocx && !isAttachment) {
+    if (!isExcel && !isTemplate && !isAttachment) {
       cb(new AppError('Only Excel, DOCX, PDF, PNG, JPG, and JPEG files are allowed', 400));
       return;
     }
@@ -160,6 +165,7 @@ router.post(
     const batchName = String(req.body.batchName ?? '').trim();
     const templateType = req.body.templateType === 'offer_letter' ? 'offer_letter' : 'certificate';
     const companyId = req.user?.role === 'super_admin' ? String(req.body.companyId ?? '').trim() : req.user?.companyId;
+    const certificateTemplateId = String(req.body.certificateTemplateId ?? '').trim();
     const emailMessage = String(req.body.emailMessage ?? '').trim();
     const attachmentMessage = String(req.body.attachmentMessage ?? '').trim();
 
@@ -176,9 +182,8 @@ router.post(
       throw new AppError('Excel file is required', 400);
     }
     if (templateType === 'offer_letter' && !templateFiles.length && !templateFile) {
-      throw new AppError('At least one DOCX file is required', 400);
+      throw new AppError('At least one DOCX or PDF file is required', 400);
     }
-
     const company = await getCompanyAccess(companyId);
     if (!company || company.status !== 'active') {
       throw new AppError('Company is blocked', 403);
@@ -187,15 +192,23 @@ router.post(
       throw new AppError('Batch creation is disabled for this company', 403);
     }
 
+    if (templateType === 'certificate' && certificateTemplateId) {
+      const certificateTemplate = await getCertificateTemplateById(certificateTemplateId, companyId);
+      if (!certificateTemplate) {
+        throw new AppError('Certificate template not found', 404);
+      }
+    }
+
     const result = await createBatch({
       companyId,
       createdBy: req.user!.id,
       senderEmail: req.user!.email,
-      senderName: req.user!.name,
+      senderName: company.name,
       emailMessage: emailMessage || undefined,
       attachmentMessage: attachmentMessage || undefined,
       batchName,
       templateType,
+      certificateTemplateId: templateType === 'certificate' ? certificateTemplateId : undefined,
       excelFilePath: excelFile.path,
       excelOriginalName: excelFile.originalname,
       templateFiles: templateFiles.length

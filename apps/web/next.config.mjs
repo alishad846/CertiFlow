@@ -8,7 +8,14 @@ const nextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   transpilePackages: ['@certiflow/shared'],
-  allowedDevOrigins: ['http://localhost:3000', 'http://192.168.56.1:3000'],
+  allowedDevOrigins: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://192.168.56.1:3000',
+    'http://192.168.56.1',
+    'http://192.168.56.1:3001',
+    'http://127.0.0.1:3001'
+  ],
   async headers() {
     return [
       {

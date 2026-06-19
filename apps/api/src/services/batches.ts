@@ -9,12 +9,16 @@ import { ensureDir, safeSegment } from './fs';
 import { buildTemplateContext, readExcelRecipients } from './excel';
 import { debitCredits } from './credits';
 import { batchQueue } from './queue';
-import { getActiveCertificateTemplate } from './certificate-templates';
+import { getActiveCertificateTemplate, getCertificateTemplateById } from './certificate-templates';
 
 function makeFileName(original: string, suffix: string) {
   const ext = path.extname(original) || suffix;
   const base = safeSegment(path.basename(original, ext).slice(0, 60)) || 'file';
   return `${Date.now()}-${randomUUID().slice(0, 8)}-${base}${ext}`;
+}
+
+function getTemplateUploadKind(originalName: string) {
+  return path.extname(originalName).toLowerCase() === '.pdf' ? 'pdf' : 'docx';
 }
 
 export async function createBatch(params: {
@@ -71,9 +75,16 @@ export async function createBatch(params: {
 
     let certificateTemplate = null as Awaited<ReturnType<typeof getActiveCertificateTemplate>> | null;
     if (isCertificate) {
-      certificateTemplate = await getActiveCertificateTemplate(params.companyId);
-      if (!certificateTemplate) {
-        throw new AppError('Please create a certificate template first', 400);
+      if (params.certificateTemplateId) {
+        certificateTemplate = await getCertificateTemplateById(params.certificateTemplateId, params.companyId);
+        if (!certificateTemplate) {
+          throw new AppError('Certificate template not found', 404);
+        }
+      } else {
+        certificateTemplate = await getActiveCertificateTemplate(params.companyId);
+        if (!certificateTemplate) {
+          throw new AppError('Please create a certificate template first', 400);
+        }
       }
     }
 
@@ -87,14 +98,16 @@ export async function createBatch(params: {
 
     for (let index = 0; index < templateFiles.length; index += 1) {
       const template = templateFiles[index];
-      const movedTemplatePath = path.join(uploadRoot, makeFileName(template.originalName, '.docx'));
+      const templateExt = path.extname(template.originalName).toLowerCase() === '.pdf' ? '.pdf' : '.docx';
+      const movedTemplatePath = path.join(uploadRoot, makeFileName(template.originalName, templateExt));
       await fs.copyFile(template.path, movedTemplatePath);
+      const templateKind = getTemplateUploadKind(template.originalName);
 
       const uploadTemplate = await client.query<{ id: string }>(
         `INSERT INTO uploads (company_id, original_name, stored_path, kind, created_by)
-         VALUES ($1, $2, $3, 'docx', $4)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id`,
-        [params.companyId, template.originalName, movedTemplatePath, params.createdBy]
+        [params.companyId, template.originalName, movedTemplatePath, templateKind, params.createdBy]
       );
       templateUploads.push(uploadTemplate.rows[0]);
     }
@@ -126,8 +139,8 @@ export async function createBatch(params: {
         params.batchName,
         params.templateType,
         uploadExcel.rows[0].id,
-        isCertificate ? certificateTemplate!.backgroundUploadId : templateUploads[0].id,
-        isCertificate ? certificateTemplate!.id : null,
+        isCertificate ? (certificateTemplate?.backgroundUploadId ?? uploadExcel.rows[0].id) : templateUploads[0].id,
+        isCertificate ? (certificateTemplate?.id ?? null) : null,
         recipients.length,
         params.createdBy,
         params.senderEmail ?? null,

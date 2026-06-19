@@ -9,7 +9,7 @@ const initializationStatements = [
        CREATE TYPE user_role AS ENUM ('super_admin', 'company_admin');
      END IF;
      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'upload_kind') THEN
-       CREATE TYPE upload_kind AS ENUM ('excel', 'docx', 'image');
+       CREATE TYPE upload_kind AS ENUM ('excel', 'docx', 'image', 'pdf');
      END IF;
      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'company_status') THEN
        CREATE TYPE company_status AS ENUM ('active', 'blocked');
@@ -144,12 +144,19 @@ const migrationStatements = [
      company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
      sender_name text,
      sender_email text,
+     reply_to_name text,
+     reply_to_email text,
      smtp_host text,
      smtp_port integer NOT NULL DEFAULT 587,
      smtp_secure boolean NOT NULL DEFAULT false,
+     smtp_allow_invalid_certs boolean NOT NULL DEFAULT false,
      smtp_user text,
      smtp_pass text,
      enabled boolean NOT NULL DEFAULT false,
+     email_subject_template text,
+     email_body_template text,
+     brand_logo_url text,
+     brand_primary_color text,
      created_at timestamptz NOT NULL DEFAULT NOW(),
      updated_at timestamptz NOT NULL DEFAULT NOW()
    )`,
@@ -158,17 +165,31 @@ const migrationStatements = [
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS sender_email text`,
   `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS reply_to_name text`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS reply_to_email text`,
+  `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_host text`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_port integer NOT NULL DEFAULT 587`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_secure boolean NOT NULL DEFAULT false`,
   `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS smtp_allow_invalid_certs boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_user text`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_pass text`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS email_subject_template text`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS email_body_template text`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS brand_logo_url text`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS brand_primary_color text`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()`,
   `ALTER TABLE IF EXISTS company_email_settings
@@ -254,6 +275,7 @@ const migrationStatements = [
   `ALTER TABLE IF EXISTS certificate_templates
      ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW()`,
   `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'image'`,
+  `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'pdf'`,
   `ALTER TABLE IF EXISTS batches
      DROP CONSTRAINT IF EXISTS batches_certificate_template_id_fkey`,
   `ALTER TABLE IF EXISTS batches

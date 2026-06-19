@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Copy, PencilLine, Trash2, Sparkles, Plus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { getTemplatePreviewSrc } from '@/lib/template-preview';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -116,9 +117,9 @@ export default function TemplatesPage() {
           templates.map((template) => (
             <Card key={template.id} className="border-white/80 overflow-hidden">
               <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
-                <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50">
+                <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 min-h-[220px]">
                   <img
-                    src={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}${template.backgroundUrl}`}
+                    src={getTemplatePreviewSrc(template)}
                     alt={template.name}
                     loading="lazy"
                     decoding="async"
@@ -181,7 +182,7 @@ export default function TemplatesPage() {
                             body: JSON.stringify({ isActive: true })
                           });
                           setTemplates((current) => current.map((item) => ({ ...item, isActive: item.id === template.id })));
-                          window.location.assign('/uploads');
+                          window.location.assign(`/uploads?templateId=${encodeURIComponent(template.id)}`);
                         } catch (error) {
                           setMessage(error instanceof Error ? error.message : 'Failed to activate template');
                         } finally {

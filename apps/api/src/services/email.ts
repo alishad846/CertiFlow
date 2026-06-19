@@ -4,6 +4,7 @@ import axios from 'axios';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { pool } from '../db/pool';
+import { renderTemplateString } from './template-placeholders';
 
 export interface SendEmailParams {
   companyId: string;
@@ -23,44 +24,60 @@ export interface SendEmailParams {
   senderName?: string;
 }
 
-let cachedTransporter: nodemailer.Transporter | null = null;
 const companyTransporters = new Map<string, nodemailer.Transporter>();
 
 type CompanyEmailSettings = {
   company_id: string;
   sender_name: string | null;
   sender_email: string | null;
+  reply_to_name: string | null;
+  reply_to_email: string | null;
   smtp_host: string | null;
   smtp_port: number | null;
   smtp_secure: boolean | null;
+  smtp_allow_invalid_certs: boolean | null;
   smtp_user: string | null;
   smtp_pass: string | null;
   enabled: boolean | null;
+  email_subject_template: string | null;
+  email_body_template: string | null;
+  brand_logo_url: string | null;
+  brand_primary_color: string | null;
 };
 
-function getTransporter() {
-  if (cachedTransporter) {
-    return cachedTransporter;
-  }
+type EmailTemplateContext = Record<string, string | number | boolean | null | undefined>;
 
-  if (!env.SMTP_HOST) {
-    throw new AppError('SMTP_HOST is not configured', 500);
-  }
-
-  cachedTransporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: env.SMTP_SECURE,
-    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
-  });
-
-  return cachedTransporter;
+function renderTemplate(template: string, context: EmailTemplateContext) {
+  return renderTemplateString(template, context);
 }
 
-function getReplyTo(params: SendEmailParams) {
-  return params.senderEmail
-    ? { name: params.senderName ?? 'CertiFlow', address: params.senderEmail }
-    : undefined;
+function buildEmailContext(params: SendEmailParams, settings?: CompanyEmailSettings, companyName?: string) {
+  return {
+    companyName: companyName ?? settings?.sender_name ?? 'CertiFlow',
+    senderName: params.senderName ?? settings?.sender_name ?? 'CertiFlow',
+    senderEmail: params.senderEmail ?? settings?.sender_email ?? '',
+    replyToName: settings?.reply_to_name ?? params.senderName ?? settings?.sender_name ?? 'CertiFlow',
+    replyToEmail: settings?.reply_to_email ?? params.senderEmail ?? '',
+    recipientName: params.recipientName,
+    recipientEmail: params.to,
+    batchId: params.batchId,
+    documentId: params.documentId,
+    brandLogoUrl: settings?.brand_logo_url ?? '',
+    brandPrimaryColor: settings?.brand_primary_color ?? '',
+    content: params.html
+  } satisfies EmailTemplateContext;
+}
+
+function getReplyTo(params: SendEmailParams, settings?: CompanyEmailSettings) {
+  const address = settings?.reply_to_email ?? params.senderEmail;
+  if (!address) {
+    return undefined;
+  }
+
+  return {
+    name: settings?.reply_to_name ?? params.senderName ?? settings?.sender_name ?? 'CertiFlow',
+    address
+  };
 }
 
 function getAttachments(params: SendEmailParams) {
@@ -73,9 +90,36 @@ function getAttachments(params: SendEmailParams) {
   return [];
 }
 
+function normalizeSmtpSecure(port: number, secure: boolean | null | undefined) {
+  if (port === 465) {
+    return true;
+  }
+  if (port === 587) {
+    return false;
+  }
+  return secure ?? false;
+}
+
+function getSmtpErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : '';
+  const lower = message.toLowerCase();
+  if (lower.includes('incorrect authentication data') || lower.includes('535')) {
+    return 'SMTP authentication failed: invalid username or password';
+  }
+  if (lower.includes('self-signed certificate')) {
+    return 'SMTP TLS failed: server certificate is self-signed or untrusted';
+  }
+  if (lower.includes('wrong version number')) {
+    return 'SMTP TLS failed: port and SSL/TLS mode do not match';
+  }
+  return message || fallback;
+}
+
 async function getCompanyEmailSettings(companyId: string) {
   const result = await pool.query<CompanyEmailSettings>(
-    `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, enabled
+    `SELECT company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port, smtp_secure,
+            smtp_allow_invalid_certs, smtp_user, smtp_pass, enabled, email_subject_template, email_body_template,
+            brand_logo_url, brand_primary_color
      FROM company_email_settings
      WHERE company_id = $1`,
     [companyId]
@@ -90,6 +134,7 @@ function getCompanyTransporter(settings: CompanyEmailSettings) {
     settings.smtp_host,
     settings.smtp_port,
     settings.smtp_secure,
+    settings.smtp_allow_invalid_certs,
     settings.smtp_user,
     settings.smtp_pass
   ].join('|');
@@ -103,10 +148,14 @@ function getCompanyTransporter(settings: CompanyEmailSettings) {
     throw new AppError('SMTP host is not configured for this company', 500);
   }
 
+  const port = settings.smtp_port ?? 587;
+  const secure = normalizeSmtpSecure(port, settings.smtp_secure);
+
   const transporter = nodemailer.createTransport({
     host: settings.smtp_host,
-    port: settings.smtp_port ?? 587,
-    secure: settings.smtp_secure ?? false,
+    port,
+    secure,
+    tls: settings.smtp_allow_invalid_certs ? { rejectUnauthorized: false } : undefined,
     auth: settings.smtp_user ? { user: settings.smtp_user, pass: settings.smtp_pass ?? undefined } : undefined
   });
 
@@ -114,29 +163,61 @@ function getCompanyTransporter(settings: CompanyEmailSettings) {
   return transporter;
 }
 
+async function verifyCompanyTransporter(settings: CompanyEmailSettings) {
+  const transporter = getCompanyTransporter(settings);
+  try {
+    await transporter.verify();
+  } catch (error) {
+    throw new AppError(getSmtpErrorMessage(error, 'SMTP verification failed'), 400);
+  }
+}
+
+export async function testCompanyEmailSettings(companyId: string) {
+  const settings = await getCompanyEmailSettings(companyId);
+  if (!settings) {
+    throw new AppError('Email sender is not configured for this company', 400);
+  }
+  if (!settings.enabled) {
+    throw new AppError('Email sender is disabled for this company', 400);
+  }
+
+  await verifyCompanyTransporter(settings);
+  return true;
+}
+
 async function sendWithCompanySettings(params: SendEmailParams, settings: CompanyEmailSettings) {
   if (!settings.enabled) {
     return false;
   }
-  if (!settings.sender_email || !settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
+  if (!settings.sender_email || !settings.smtp_host) {
     throw new AppError('Company email sender is not fully configured', 500);
   }
 
   const transporter = getCompanyTransporter(settings);
-  await transporter.sendMail({
-    from: {
-      name: settings.sender_name ?? 'CertiFlow',
-      address: settings.sender_email
-    },
-    replyTo: getReplyTo(params),
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-    attachments: getAttachments(params).map((attachment) => ({
-      filename: attachment.filename,
-      path: attachment.path
-    }))
-  });
+  const company = await pool.query<{ name: string }>('SELECT name FROM companies WHERE id = $1', [settings.company_id]);
+  const displayName = settings.sender_name ?? company.rows[0]?.name ?? 'CertiFlow';
+  const context = buildEmailContext(params, settings, company.rows[0]?.name);
+  const subject = settings.email_subject_template ? renderTemplate(settings.email_subject_template, context) : params.subject;
+  const html = settings.email_body_template ? renderTemplate(settings.email_body_template, context) : params.html;
+
+  try {
+    await transporter.sendMail({
+      from: {
+        name: displayName,
+        address: settings.sender_email
+      },
+      replyTo: getReplyTo(params, settings),
+      to: params.to,
+      subject,
+      html,
+      attachments: getAttachments(params).map((attachment) => ({
+        filename: attachment.filename,
+        path: attachment.path
+      }))
+    });
+  } catch (error) {
+    throw new AppError(getSmtpErrorMessage(error, 'Email send failed'), 400);
+  }
   return true;
 }
 
@@ -153,7 +234,7 @@ async function sendWithN8n(params: SendEmailParams) {
     }))
   );
   await axios.post(env.N8N_WEBHOOK_URL, {
-    from: env.MAIL_FROM,
+    from: params.senderEmail ? `${params.senderName ?? ''} <${params.senderEmail}>` : env.MAIL_FROM,
     replyTo: params.senderEmail ?? undefined,
     replyToName: params.senderName ?? undefined,
     to: params.to,
@@ -179,7 +260,7 @@ async function sendWithResend(params: SendEmailParams) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM,
+      from: params.senderEmail ? `${params.senderName ?? ''} <${params.senderEmail}>` : env.RESEND_FROM,
       to: params.to,
       subject: params.subject,
       html: params.html,
@@ -199,21 +280,6 @@ async function sendWithResend(params: SendEmailParams) {
   }
 }
 
-async function sendWithNodemailer(params: SendEmailParams) {
-  const transporter = getTransporter();
-  await transporter.sendMail({
-    from: env.MAIL_FROM,
-    replyTo: getReplyTo(params),
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-    attachments: getAttachments(params).map((attachment) => ({
-      filename: attachment.filename,
-      path: attachment.path
-    }))
-  });
-}
-
 export async function sendEmail(params: SendEmailParams) {
   const companySettings = await getCompanyEmailSettings(params.companyId);
   if (companySettings?.enabled) {
@@ -227,5 +293,14 @@ export async function sendEmail(params: SendEmailParams) {
   if (env.EMAIL_PROVIDER === 'resend') {
     return sendWithResend(params);
   }
-  return sendWithNodemailer(params);
+
+  if (!companySettings) {
+    throw new AppError('Email sender is not configured for this company', 400);
+  }
+
+  if (!companySettings.enabled) {
+    throw new AppError('Email sender is disabled for this company', 400);
+  }
+
+  throw new AppError('Email sender configuration is invalid for this company', 500);
 }

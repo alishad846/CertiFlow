@@ -32,6 +32,8 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 4000
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/certiflow
+      REDIS_URL: redis://redis:6379
       UPLOAD_DIR: /app/uploads
     ports:
       - '4000:4000'
@@ -51,6 +53,8 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/certiflow
+      REDIS_URL: redis://redis:6379
       UPLOAD_DIR: /app/uploads
     command: ['npm', 'run', 'start:worker', '--workspace', '@certiflow/api']
     volumes:
