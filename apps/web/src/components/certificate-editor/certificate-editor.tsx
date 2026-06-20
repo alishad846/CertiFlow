@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { apiUrl } from '@/lib/api';
+import { getBackgroundPreviewSrc } from '@/lib/background-preview';
 import type { CertificateFieldConfig, CertificateIssueDateMode } from '@/types/certificate';
 
 const supportedFields = [
@@ -33,8 +33,21 @@ const defaultFieldStyle: CertificateFieldConfig = {
   align: 'center'
 };
 
+type EditorField = CertificateFieldConfig & {
+  id: string;
+};
+
 function clampFontSize(value: number) {
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, value));
+}
+
+function createStableId() {
+  const runtimeCrypto = globalThis.crypto;
+  if (runtimeCrypto && typeof runtimeCrypto.randomUUID === 'function') {
+    return runtimeCrypto.randomUUID();
+  }
+
+  return `field_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function createUniqueFieldName(prefix: string, fields: CertificateFieldConfig[]) {
@@ -57,6 +70,80 @@ function formatIssueDate(value: string) {
     month: 'short',
     year: 'numeric'
   }).format(date);
+}
+
+function isCertificateFieldConfig(value: unknown): value is CertificateFieldConfig {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.field === 'string' &&
+    entry.field.trim().length > 0 &&
+    typeof entry.x === 'number' &&
+    Number.isFinite(entry.x) &&
+    typeof entry.y === 'number' &&
+    Number.isFinite(entry.y) &&
+    typeof entry.width === 'number' &&
+    Number.isFinite(entry.width) &&
+    entry.width > 0 &&
+    typeof entry.fontSize === 'number' &&
+    Number.isFinite(entry.fontSize) &&
+    entry.fontSize > 0 &&
+    typeof entry.fontFamily === 'string' &&
+    entry.fontFamily.trim().length > 0 &&
+    typeof entry.color === 'string' &&
+    entry.color.trim().length > 0 &&
+    (entry.align === 'left' || entry.align === 'center' || entry.align === 'right') &&
+    (entry.pageNumber === undefined ||
+      (typeof entry.pageNumber === 'number' &&
+        Number.isInteger(entry.pageNumber) &&
+        entry.pageNumber > 0))
+  );
+}
+
+function getFieldPageNumber(field: CertificateFieldConfig) {
+  return typeof field.pageNumber === 'number' && Number.isInteger(field.pageNumber) && field.pageNumber > 0
+    ? field.pageNumber
+    : undefined;
+}
+
+function shouldShowOnPage(field: CertificateFieldConfig, pageNumber: number) {
+  const fieldPageNumber = getFieldPageNumber(field);
+  if (fieldPageNumber !== undefined) {
+    return fieldPageNumber === pageNumber;
+  }
+
+  return pageNumber === 1;
+}
+
+function createEditorField(field: CertificateFieldConfig): EditorField {
+  return {
+    ...field,
+    id: createStableId()
+  };
+}
+
+function normalizeFieldConfig(fields: CertificateTemplateView['fieldConfig']) {
+  if (!Array.isArray(fields)) {
+    return [];
+  }
+
+  return fields
+    .filter(isCertificateFieldConfig)
+    .map((field) => ({
+      field: field.field,
+      x: field.x,
+      y: field.y,
+      width: field.width,
+      fontSize: field.fontSize,
+      fontFamily: field.fontFamily,
+      color: field.color,
+      align: field.align,
+      ...(typeof field.pageNumber === 'number' ? { pageNumber: field.pageNumber } : {}),
+      ...(typeof field.text === 'string' ? { text: field.text } : {})
+    })) as CertificateFieldConfig[];
 }
 
 export type CertificateTemplateView = {
@@ -84,6 +171,7 @@ export function CertificateEditor({
   template,
   onSave
 }: CertificateEditorProps) {
+  const normalizedTemplateFields = normalizeFieldConfig(template.fieldConfig);
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -91,14 +179,18 @@ export function CertificateEditor({
   const toolsToggleRef = useRef<HTMLButtonElement | null>(null);
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [name, setName] = useState(template.name);
-  const [fields, setFields] = useState<CertificateFieldConfig[]>(template.fieldConfig.length ? template.fieldConfig : []);
-  const [selectedField, setSelectedField] = useState<string | null>(template.fieldConfig[0]?.field ?? null);
+  const [fields, setFields] = useState<EditorField[]>(normalizedTemplateFields.map(createEditorField));
+  const [selectedField, setSelectedField] = useState<string | null>(fields[0]?.id ?? null);
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
   const [customFieldName, setCustomFieldName] = useState('');
   const [customTextValue, setCustomTextValue] = useState(DEFAULT_FREE_TEXT);
   const [zoom, setZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
+  const [backgroundPage, setBackgroundPage] = useState(1);
+  const [backgroundPageCount, setBackgroundPageCount] = useState(1);
+  const [backgroundPreviewUrl, setBackgroundPreviewUrl] = useState('');
+  const [backgroundPreviewLoading, setBackgroundPreviewLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
@@ -109,9 +201,11 @@ export function CertificateEditor({
   } | null>(null);
 
   useEffect(() => {
+    const nextFields = normalizeFieldConfig(template.fieldConfig);
     setName(template.name);
-    setFields(template.fieldConfig.length ? template.fieldConfig : []);
-    setSelectedField(template.fieldConfig[0]?.field ?? null);
+    const nextEditorFields = nextFields.map(createEditorField);
+    setFields(nextEditorFields);
+    setSelectedField(nextEditorFields[0]?.id ?? null);
     setIssueDateMode(template.issueDateMode ?? 'current_date');
     setIssueDateValue(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
     setSaveState('idle');
@@ -148,7 +242,7 @@ export function CertificateEditor({
       const nextY = Math.max(0, pointerY - dragState.offsetY);
       setFields((current) =>
         current.map((field) =>
-          field.field === dragState.field
+          field.id === dragState.field
             ? {
                 ...field,
                 x: nextX,
@@ -182,7 +276,7 @@ export function CertificateEditor({
         event.preventDefault();
         setFields((current) =>
           current.map((field) =>
-            field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + FONT_SIZE_STEP) } : field
+            field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + FONT_SIZE_STEP) } : field
           )
         );
       }
@@ -191,7 +285,7 @@ export function CertificateEditor({
         event.preventDefault();
         setFields((current) =>
           current.map((field) =>
-            field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize - FONT_SIZE_STEP) } : field
+            field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize - FONT_SIZE_STEP) } : field
           )
         );
       }
@@ -233,6 +327,119 @@ export function CertificateEditor({
       document.removeEventListener('keydown', handleEscape);
     };
   }, [toolsExpanded]);
+
+  useEffect(() => {
+    setBackgroundPage(1);
+    setBackgroundPageCount(1);
+  }, [template.backgroundUrl]);
+
+  useEffect(() => {
+    if (!backgroundPreviewUrl) {
+      return;
+    }
+
+    return () => {
+      URL.revokeObjectURL(backgroundPreviewUrl);
+    };
+  }, [backgroundPreviewUrl]);
+
+  useEffect(() => {
+    if (!template.backgroundUrl) {
+      setBackgroundPreviewUrl('');
+      setBackgroundPageCount(1);
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
+    const loadPreview = async () => {
+      setBackgroundPreviewLoading(true);
+      try {
+        const response = await fetch(getBackgroundPreviewSrc(template.backgroundUrl, backgroundPage), {
+          credentials: 'include',
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load background preview');
+        }
+
+        const pageCountHeader = response.headers.get('x-page-count');
+        const nextPageCount = Math.max(1, Number(pageCountHeader ?? '1') || 1);
+        const blob = await response.blob();
+        const nextUrl = URL.createObjectURL(blob);
+
+        if (!active) {
+          URL.revokeObjectURL(nextUrl);
+          return;
+        }
+
+        setBackgroundPageCount(nextPageCount);
+        setBackgroundPreviewUrl((current) => {
+          if (current) {
+            URL.revokeObjectURL(current);
+          }
+          return nextUrl;
+        });
+
+        if (backgroundPage > nextPageCount) {
+          setBackgroundPage(nextPageCount);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setBackgroundPreviewUrl('');
+        setBackgroundPageCount(1);
+      } finally {
+        if (active) {
+          setBackgroundPreviewLoading(false);
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [backgroundPage, template.backgroundUrl]);
+
+  useEffect(() => {
+    setSelectedField((currentSelected) => {
+      if (currentSelected) {
+        const currentField = fields.find((field) => field.id === currentSelected);
+        if (currentField) {
+          if (shouldShowOnPage(currentField, backgroundPage)) {
+            return currentSelected;
+          }
+        }
+      }
+
+      return fields.find((field) => shouldShowOnPage(field, backgroundPage))?.id ?? null;
+    });
+  }, [backgroundPage, fields]);
+
+  useEffect(() => {
+    if (backgroundPageCount <= 1) {
+      return;
+    }
+
+    setFields((current) =>
+      current.some((field) => getFieldPageNumber(field) === undefined)
+        ? current.map((field) =>
+            getFieldPageNumber(field) === undefined
+              ? {
+                  ...field,
+                  pageNumber: 1
+                }
+              : field
+          )
+        : current
+    );
+  }, [backgroundPageCount]);
 
   const stageWidth = template.imageWidth || 1200;
   const stageHeight = template.imageHeight || 800;
@@ -290,7 +497,11 @@ export function CertificateEditor({
     };
   }, [selectedField]);
 
-  const selected = useMemo(() => fields.find((field) => field.field === selectedField) ?? null, [fields, selectedField]);
+  const selected = useMemo(() => fields.find((field) => field.id === selectedField) ?? null, [fields, selectedField]);
+  const visibleFields = useMemo(
+    () => fields.filter((field) => shouldShowOnPage(field, backgroundPage)),
+    [backgroundPage, fields]
+  );
   const displayZoom = zoom * fitZoom;
   const resolvedIssueDate = useMemo(() => {
     if (issueDateMode === 'manual' && issueDateValue) {
@@ -299,8 +510,8 @@ export function CertificateEditor({
     return formatIssueDate(new Date().toISOString().slice(0, 10));
   }, [issueDateMode, issueDateValue]);
 
-  const updateField = (fieldName: string, patch: Partial<CertificateFieldConfig>) => {
-    setFields((current) => current.map((field) => (field.field === fieldName ? { ...field, ...patch } : field)));
+  const updateField = (fieldId: string, patch: Partial<CertificateFieldConfig>) => {
+    setFields((current) => current.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
   };
 
   const addField = (fieldName: string) => {
@@ -309,21 +520,18 @@ export function CertificateEditor({
       return;
     }
     setFields((current) => {
-      if (current.some((field) => field.field === normalizedField)) {
-        setSelectedField(normalizedField);
-        return current;
-      }
-
       const nextField: CertificateFieldConfig = {
         ...defaultFieldStyle,
         field: normalizedField,
         x: Math.max(80, stageWidth / 2 - 160),
         y: Math.max(80, stageHeight / 2 - 40),
-        width: 320
+        width: 320,
+        pageNumber: backgroundPage
       };
 
-      setSelectedField(normalizedField);
-      return [...current, nextField];
+      const editorField = createEditorField(nextField);
+      setSelectedField(editorField.id);
+      return [...current, editorField];
     });
   };
 
@@ -333,16 +541,18 @@ export function CertificateEditor({
 
     setFields((current) => {
       const fieldName = createUniqueFieldName('text', current);
-      const nextField: CertificateFieldConfig = {
+      const nextField: EditorField = {
         ...defaultFieldStyle,
         field: fieldName,
         text: nextText,
         x: Math.max(80, stageWidth / 2 - 160),
         y: Math.max(80, stageHeight / 2 - 40),
-        width: Math.max(280, nextText.length * 12)
+        width: Math.max(280, nextText.length * 12),
+        pageNumber: backgroundPage,
+        id: createStableId()
       };
 
-      setSelectedField(fieldName);
+      setSelectedField(nextField.id);
       return [...current, nextField];
     });
   };
@@ -354,7 +564,7 @@ export function CertificateEditor({
 
     setFields((current) =>
       current.map((field) =>
-        field.field === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + delta) } : field
+        field.id === selectedField ? { ...field, fontSize: clampFontSize(field.fontSize + delta) } : field
       )
     );
   };
@@ -363,7 +573,7 @@ export function CertificateEditor({
     if (!selectedField) {
       return;
     }
-    setFields((current) => current.filter((field) => field.field !== selectedField));
+    setFields((current) => current.filter((field) => field.id !== selectedField));
     setSelectedField(null);
   };
 
@@ -494,7 +704,7 @@ export function CertificateEditor({
               try {
                 await onSave({
                   name,
-                  fieldConfig: fields,
+                  fieldConfig: fields.map(({ id: _id, ...field }) => field),
                   issueDateMode,
                   issueDateValue: issueDateMode === 'manual' ? issueDateValue : null
                 });
@@ -520,9 +730,38 @@ export function CertificateEditor({
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                 : 'border-rose-200 bg-rose-50 text-rose-700'
             }`}
-          >
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>{saveMessage}</span>
+            >
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>{saveMessage}</span>
+            </div>
+        ) : null}
+
+        {backgroundPageCount > 1 ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">PDF pages</p>
+              <p className="text-xs text-slate-500">
+                Showing page {Math.min(backgroundPage, backgroundPageCount)} of {backgroundPageCount}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={backgroundPreviewLoading || backgroundPage <= 1}
+                onClick={() => setBackgroundPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={backgroundPreviewLoading || backgroundPage >= backgroundPageCount}
+                onClick={() => setBackgroundPage((current) => Math.min(backgroundPageCount, current + 1))}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -539,29 +778,29 @@ export function CertificateEditor({
               height: stageHeight * displayZoom
             }}
           >
-            {template.backgroundUrl ? (
+            {backgroundPreviewUrl ? (
               <img
-                src={`${apiUrl}${template.backgroundUrl}`}
+                src={backgroundPreviewUrl}
                 alt={template.name}
                 className="absolute inset-0 h-full w-full select-none object-fill"
                 draggable={false}
               />
             ) : null}
 
-            {fields.map((field) => {
-              const isSelected = field.field === selectedField;
+            {visibleFields.map((field) => {
+              const isSelected = field.id === selectedField;
               const isIssueDate = field.field === 'issue_date';
               const isFreeText = typeof field.text === 'string';
               const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
               return (
                 <div
-                  key={field.field}
+                  key={field.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelectedField(field.field)}
+                  onClick={() => setSelectedField(field.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
-                      setSelectedField(field.field);
+                      setSelectedField(field.id);
                     }
                   }}
                   onPointerDown={(event) => {
@@ -572,9 +811,9 @@ export function CertificateEditor({
                     }
                     const pointerX = (event.clientX - rect.left) / displayZoom;
                     const pointerY = (event.clientY - rect.top) / displayZoom;
-                    setSelectedField(field.field);
+                    setSelectedField(field.id);
                     setDragState({
-                      field: field.field,
+                      field: field.id,
                       offsetX: pointerX - field.x,
                       offsetY: pointerY - field.y
                     });
@@ -628,7 +867,7 @@ export function CertificateEditor({
               {selected ? (selected.text !== undefined ? 'Free text' : `{${selected.field}}`) : 'None'}
             </p>
           </div>
-          {selected ? (
+              {selected ? (
             <button
               type="button"
               onClick={removeSelected}
@@ -647,7 +886,7 @@ export function CertificateEditor({
                 <label className="mb-2 block text-sm font-medium text-slate-700">Text content</label>
                 <textarea
                   value={selected.text}
-                  onChange={(event) => updateField(selected.field, { text: event.target.value })}
+                  onChange={(event) => updateField(selected.id, { text: event.target.value })}
                   rows={4}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-accent-400 focus:ring-4 focus:ring-accent-100"
                 />
@@ -696,7 +935,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.x}
-                onChange={(event) => updateField(selected.field, { x: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { x: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -704,7 +943,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.y}
-                onChange={(event) => updateField(selected.field, { y: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { y: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -712,7 +951,7 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.width}
-                onChange={(event) => updateField(selected.field, { width: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { width: Number(event.target.value) })}
               />
             </div>
             <div>
@@ -720,14 +959,14 @@ export function CertificateEditor({
               <Input
                 type="number"
                 value={selected.fontSize}
-                onChange={(event) => updateField(selected.field, { fontSize: clampFontSize(Number(event.target.value)) })}
+                onChange={(event) => updateField(selected.id, { fontSize: clampFontSize(Number(event.target.value)) })}
               />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font family</label>
               <select
                 value={selected.fontFamily}
-                onChange={(event) => updateField(selected.field, { fontFamily: event.target.value })}
+                onChange={(event) => updateField(selected.id, { fontFamily: event.target.value })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
               >
                 <option value="Poppins">Poppins</option>
@@ -741,7 +980,7 @@ export function CertificateEditor({
               <Input
                 type="color"
                 value={selected.color}
-                onChange={(event) => updateField(selected.field, { color: event.target.value })}
+                onChange={(event) => updateField(selected.id, { color: event.target.value })}
                 className="h-12 p-1"
               />
             </div>
@@ -749,7 +988,7 @@ export function CertificateEditor({
               <label className="mb-2 block text-sm font-medium text-slate-700">Align</label>
               <select
                 value={selected.align}
-                onChange={(event) => updateField(selected.field, { align: event.target.value as CertificateFieldConfig['align'] })}
+                onChange={(event) => updateField(selected.id, { align: event.target.value as CertificateFieldConfig['align'] })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
               >
                 <option value="left">Left</option>
@@ -757,6 +996,31 @@ export function CertificateEditor({
                 <option value="right">Right</option>
               </select>
             </div>
+            {backgroundPageCount > 1 ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Page</label>
+                <select
+                  value={typeof selected.pageNumber === 'number' ? String(selected.pageNumber) : 'all'}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    updateField(selected.id, {
+                      pageNumber: value === 'all' ? undefined : Number(value)
+                    });
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                >
+                  <option value="all">All pages</option>
+                  {Array.from({ length: backgroundPageCount }, (_value, index) => {
+                    const page = index + 1;
+                    return (
+                      <option key={page} value={page}>
+                        Page {page}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="mt-5 text-sm leading-6 text-slate-500">Click a placeholder to place it on the certificate, then drag it where you want it.</p>

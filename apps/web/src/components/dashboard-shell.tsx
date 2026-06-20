@@ -59,7 +59,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         if (active) setUser(data.user);
       })
       .catch(() => {
-        window.location.replace('/login');
+        if (active) {
+          window.location.replace('/login');
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

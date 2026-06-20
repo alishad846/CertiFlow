@@ -29,8 +29,19 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-function buildEmailHtml(message: string, recipientName: string) {
-  const resolved = message.replace(/{{\s*name\s*}}/gi, recipientName).trim();
+function renderTemplateString(template: string, context: Record<string, unknown>) {
+  return template.replace(/{{\s*([^{}]+?)\s*}}/g, (match, rawKey: string) => {
+    const key = rawKey.trim().toLowerCase();
+    const value = Object.entries(context).find(([contextKey]) => contextKey.toLowerCase() === key)?.[1];
+    if (value === null || value === undefined) {
+      return match;
+    }
+    return String(value);
+  });
+}
+
+function buildEmailHtml(message: string, context: Record<string, unknown>, recipientName: string) {
+  const resolved = renderTemplateString(message, context).trim();
   const safeText = escapeHtml(resolved || `Hello ${recipientName},`);
   return `<p>${safeText.replace(/\r?\n/g, '<br>')}</p><p>Please find your attached document.</p>`;
 }
@@ -137,6 +148,14 @@ async function markDocumentFailed(documentId: string, batchId: string, errorMess
     [documentId, errorMessage]
   );
   await refreshBatchCounts(batchId);
+}
+
+function isPermanentEmailError(error: unknown) {
+  if (!(error instanceof AppError)) {
+    return false;
+  }
+
+  return [400, 401, 403, 404, 422, 502].includes(error.statusCode);
 }
 
 export async function processBatchJob(job: Job<{ batchId: string }>) {
@@ -258,7 +277,7 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           }
         }
 
-        const extraAttachments = batchAttachments.length
+      const extraAttachments = batchAttachments.length
           ? await Promise.all(
               batchAttachments.map((attachment) =>
                 renderPersonalizedAttachment({
@@ -292,7 +311,7 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             recipientName: document.recipient_name,
             recipientEmail: document.recipient_email,
             subject: `${batch.name} - ${batch.template_type === 'certificate' ? 'Certificate' : 'Offer Letter'}`,
-            html: buildEmailHtml(batch.email_message ?? '', document.recipient_name),
+            html: buildEmailHtml(batch.email_message ?? '', certificateContext, document.recipient_name),
             pdfPath: generatedAttachments[0]?.path,
             attachmentName: generatedAttachments[0]?.filename,
             attachments: [...generatedAttachments, ...extraAttachments],
@@ -391,6 +410,10 @@ export async function processEmailJob(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Email send failed';
     const shouldMarkFailed = (job.attemptsMade ?? 0) + 1 >= (job.opts.attempts ?? 1);
+
+    if (isPermanentEmailError(error)) {
+      await job.discard();
+    }
 
     await pool.query(
       `UPDATE documents

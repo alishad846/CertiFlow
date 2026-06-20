@@ -7,6 +7,7 @@ export type CertificateFieldConfig = {
   fontFamily: string;
   color: string;
   align: 'left' | 'center' | 'right';
+  pageNumber?: number;
   text?: string;
 };
 

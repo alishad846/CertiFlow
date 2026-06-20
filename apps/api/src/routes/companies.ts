@@ -48,6 +48,16 @@ function resolveCompanyId(req: import('express').Request) {
   throw new AppError('Forbidden', 403);
 }
 
+function normalizeSmtpSecure(smtpPort: number, smtpSecure: boolean) {
+  if (smtpPort === 465) {
+    return true;
+  }
+  if (smtpPort === 587) {
+    return false;
+  }
+  return smtpSecure;
+}
+
 router.get(
   '/',
   requireAuth,
@@ -246,11 +256,13 @@ router.get(
       smtp_host: string | null;
       smtp_port: number | null;
       smtp_secure: boolean | null;
+      smtp_allow_invalid_certs: boolean | null;
       smtp_user: string | null;
       enabled: boolean | null;
       updated_at: string | null;
     }>(
-      `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_user, enabled, updated_at
+      `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_allow_invalid_certs,
+              smtp_user, enabled, updated_at
        FROM company_email_settings
        WHERE company_id = $1`,
       [companyId]
@@ -270,6 +282,7 @@ router.get(
             smtpHost: settings.smtp_host,
             smtpPort: settings.smtp_port,
             smtpSecure: settings.smtp_secure,
+            smtpAllowInvalidCerts: settings.smtp_allow_invalid_certs,
             smtpUser: settings.smtp_user,
             enabled: settings.enabled,
             updatedAt: settings.updated_at
@@ -288,7 +301,8 @@ router.patch(
     const senderEmail = String(req.body.senderEmail ?? '').trim() || null;
     const smtpHost = String(req.body.smtpHost ?? '').trim() || null;
     const smtpPort = Number(req.body.smtpPort ?? 587);
-    const smtpSecure = Boolean(req.body.smtpSecure);
+    const smtpSecure = normalizeSmtpSecure(smtpPort, Boolean(req.body.smtpSecure));
+    const smtpAllowInvalidCerts = Boolean(req.body.smtpAllowInvalidCerts);
     const smtpUser = String(req.body.smtpUser ?? '').trim() || null;
     const smtpPass = String(req.body.smtpPass ?? '').trim() || null;
     const enabled = Boolean(req.body.enabled);
@@ -326,9 +340,9 @@ router.patch(
     const saved = await pool.query(
       `INSERT INTO company_email_settings (
          company_id, sender_name, sender_email, smtp_host, smtp_port,
-         smtp_secure, smtp_user, smtp_pass, enabled, updated_at
+         smtp_secure, smtp_allow_invalid_certs, smtp_user, smtp_pass, enabled, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
        ON CONFLICT (company_id)
        DO UPDATE SET
          sender_name = EXCLUDED.sender_name,
@@ -336,14 +350,16 @@ router.patch(
          smtp_host = EXCLUDED.smtp_host,
          smtp_port = EXCLUDED.smtp_port,
          smtp_secure = EXCLUDED.smtp_secure,
+         smtp_allow_invalid_certs = EXCLUDED.smtp_allow_invalid_certs,
          smtp_user = EXCLUDED.smtp_user,
          smtp_pass = EXCLUDED.smtp_pass,
          enabled = EXCLUDED.enabled,
          updated_at = NOW()
        RETURNING company_id AS "companyId", sender_name AS "senderName", sender_email AS "senderEmail",
                  smtp_host AS "smtpHost", smtp_port AS "smtpPort", smtp_secure AS "smtpSecure",
+                 smtp_allow_invalid_certs AS "smtpAllowInvalidCerts",
                  smtp_user AS "smtpUser", enabled, updated_at AS "updatedAt"` ,
-      [companyId, senderName, senderEmail, smtpHost, smtpPort, smtpSecure, smtpUser, password, enabled]
+      [companyId, senderName, senderEmail, smtpHost, smtpPort, smtpSecure, smtpAllowInvalidCerts, smtpUser, password, enabled]
     );
 
     res.json({

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Copy, PencilLine, Trash2, Sparkles, Plus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { getBackgroundPreviewSrc } from '@/lib/background-preview';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -118,7 +119,7 @@ export default function TemplatesPage() {
               <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
                 <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50">
                   <img
-                    src={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}${template.backgroundUrl}`}
+                    src={getBackgroundPreviewSrc(template.backgroundUrl)}
                     alt={template.name}
                     loading="lazy"
                     decoding="async"

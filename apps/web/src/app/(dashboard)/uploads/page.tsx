@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { UploadCloud, Sparkles } from 'lucide-react';
-import { apiFetch, apiUrl } from '@/lib/api';
+import { apiFetch, getApiUrl } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -165,7 +165,7 @@ export default function UploadPage() {
                   form.append('excelFile', excelFile);
                   if (companyId) form.append('companyId', companyId);
 
-                  const response = await fetch(`${apiUrl}/certificate-templates/preview`, {
+                  const response = await fetch(`${getApiUrl()}/certificate-templates/preview`, {
                     method: 'POST',
                     credentials: 'include',
                     body: form
@@ -202,12 +202,10 @@ export default function UploadPage() {
           {previewUrl ? (
             <div ref={previewSectionRef} className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-700">Sample preview</p>
-              <img
+              <iframe
                 src={previewUrl}
-                alt="Certificate preview"
-                loading="lazy"
-                decoding="async"
-                className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white"
+                title="Certificate preview"
+                className="mt-3 h-[80vh] w-full rounded-[24px] border border-slate-200 bg-white"
               />
             </div>
           ) : null}

@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  --font-heading: "Space Grotesk", "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
 }
 
 html {

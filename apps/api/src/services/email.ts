@@ -33,10 +33,55 @@ type CompanyEmailSettings = {
   smtp_host: string | null;
   smtp_port: number | null;
   smtp_secure: boolean | null;
+  smtp_allow_invalid_certs: boolean | null;
   smtp_user: string | null;
   smtp_pass: string | null;
   enabled: boolean | null;
 };
+
+type SmtpError = Error & {
+  code?: string;
+  responseCode?: number;
+  response?: string;
+};
+
+function shouldAllowInvalidCerts(companySetting?: boolean | null) {
+  return Boolean(companySetting ?? env.SMTP_ALLOW_INVALID_CERTS);
+}
+
+function buildTlsOptions(allowInvalidCerts: boolean) {
+  return allowInvalidCerts ? { rejectUnauthorized: false } : undefined;
+}
+
+function isSmtpAuthError(error: unknown) {
+  const smtpError = error as SmtpError | undefined;
+  return smtpError?.code === 'EAUTH' || smtpError?.responseCode === 535;
+}
+
+function isSmtpTlsError(error: unknown) {
+  const smtpError = error as SmtpError | undefined;
+  const message = smtpError?.message ?? '';
+  return (
+    smtpError?.code === 'ESOCKET' &&
+    /self-signed certificate|unable to verify the first certificate|UNABLE_TO_VERIFY_LEAF_SIGNATURE/i.test(message)
+  );
+}
+
+function formatSmtpAuthMessage(params: {
+  source: string;
+  host: string;
+  user?: string | null;
+}) {
+  const userPart = params.user ? ` with username ${params.user}` : '';
+  return `SMTP authentication failed for ${params.source} using ${params.host}${userPart}. Check the SMTP username/password and confirm the sender account is allowed to authenticate.`;
+}
+
+function formatSmtpTlsMessage(params: {
+  source: string;
+  host: string;
+}) {
+  return `SMTP certificate verification failed for ${params.source} using ${params.host}. Enable "Allow invalid SMTP certificates" for this sender or install a trusted certificate on the SMTP server.`;
+}
 
 function getTransporter() {
   if (cachedTransporter) {
@@ -51,7 +96,8 @@ function getTransporter() {
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
-    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
+    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+    tls: buildTlsOptions(shouldAllowInvalidCerts())
   });
 
   return cachedTransporter;
@@ -75,7 +121,8 @@ function getAttachments(params: SendEmailParams) {
 
 async function getCompanyEmailSettings(companyId: string) {
   const result = await pool.query<CompanyEmailSettings>(
-    `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, enabled
+    `SELECT company_id, sender_name, sender_email, smtp_host, smtp_port, smtp_secure, smtp_allow_invalid_certs,
+            smtp_user, smtp_pass, enabled
      FROM company_email_settings
      WHERE company_id = $1`,
     [companyId]
@@ -90,6 +137,7 @@ function getCompanyTransporter(settings: CompanyEmailSettings) {
     settings.smtp_host,
     settings.smtp_port,
     settings.smtp_secure,
+    settings.smtp_allow_invalid_certs,
     settings.smtp_user,
     settings.smtp_pass
   ].join('|');
@@ -107,7 +155,8 @@ function getCompanyTransporter(settings: CompanyEmailSettings) {
     host: settings.smtp_host,
     port: settings.smtp_port ?? 587,
     secure: settings.smtp_secure ?? false,
-    auth: settings.smtp_user ? { user: settings.smtp_user, pass: settings.smtp_pass ?? undefined } : undefined
+    auth: settings.smtp_user ? { user: settings.smtp_user, pass: settings.smtp_pass ?? undefined } : undefined,
+    tls: buildTlsOptions(shouldAllowInvalidCerts(settings.smtp_allow_invalid_certs))
   });
 
   companyTransporters.set(cacheKey, transporter);
@@ -123,20 +172,43 @@ async function sendWithCompanySettings(params: SendEmailParams, settings: Compan
   }
 
   const transporter = getCompanyTransporter(settings);
-  await transporter.sendMail({
-    from: {
-      name: settings.sender_name ?? 'CertiFlow',
-      address: settings.sender_email
-    },
-    replyTo: getReplyTo(params),
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-    attachments: getAttachments(params).map((attachment) => ({
-      filename: attachment.filename,
-      path: attachment.path
-    }))
-  });
+  try {
+    await transporter.sendMail({
+      from: {
+        name: settings.sender_name ?? 'CertiFlow',
+        address: settings.sender_email
+      },
+      replyTo: getReplyTo(params),
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      attachments: getAttachments(params).map((attachment) => ({
+        filename: attachment.filename,
+        path: attachment.path
+      }))
+    });
+  } catch (error) {
+    if (isSmtpAuthError(error)) {
+      throw new AppError(
+        formatSmtpAuthMessage({
+          source: `company sender ${settings.sender_email ?? settings.company_id}`,
+          host: settings.smtp_host ?? 'SMTP host',
+          user: settings.smtp_user
+        }),
+        401
+      );
+    }
+    if (isSmtpTlsError(error)) {
+      throw new AppError(
+        formatSmtpTlsMessage({
+          source: `company sender ${settings.sender_email ?? settings.company_id}`,
+          host: settings.smtp_host ?? 'SMTP host'
+        }),
+        502
+      );
+    }
+    throw error;
+  }
   return true;
 }
 
@@ -201,17 +273,40 @@ async function sendWithResend(params: SendEmailParams) {
 
 async function sendWithNodemailer(params: SendEmailParams) {
   const transporter = getTransporter();
-  await transporter.sendMail({
-    from: env.MAIL_FROM,
-    replyTo: getReplyTo(params),
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-    attachments: getAttachments(params).map((attachment) => ({
-      filename: attachment.filename,
-      path: attachment.path
-    }))
-  });
+  try {
+    await transporter.sendMail({
+      from: env.MAIL_FROM,
+      replyTo: getReplyTo(params),
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      attachments: getAttachments(params).map((attachment) => ({
+        filename: attachment.filename,
+        path: attachment.path
+      }))
+    });
+  } catch (error) {
+    if (isSmtpAuthError(error)) {
+      throw new AppError(
+        formatSmtpAuthMessage({
+          source: 'global SMTP settings',
+          host: env.SMTP_HOST || 'SMTP host',
+          user: env.SMTP_USER || null
+        }),
+        401
+      );
+    }
+    if (isSmtpTlsError(error)) {
+      throw new AppError(
+        formatSmtpTlsMessage({
+          source: 'global SMTP settings',
+          host: env.SMTP_HOST || 'SMTP host'
+        }),
+        502
+      );
+    }
+    throw error;
+  }
 }
 
 export async function sendEmail(params: SendEmailParams) {

@@ -20,7 +20,7 @@ export default function CertificateEditorStartPage() {
       <Card className="border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Certificate editor</p>
         <h2 className="mt-3 text-4xl font-bold tracking-tight text-ink md:text-5xl">
-          Upload a background image and place dynamic fields on it.
+          Upload a background image or PDF template and place dynamic fields on it.
         </h2>
       </Card>
 
@@ -31,7 +31,7 @@ export default function CertificateEditorStartPage() {
             event.preventDefault();
             setMessage('');
             if (!backgroundFile) {
-              setMessage('Please choose a PNG or JPG background image.');
+              setMessage('Please choose a PNG, JPG, or PDF background file.');
               return;
             }
 
@@ -67,8 +67,8 @@ export default function CertificateEditorStartPage() {
 
           <FileDropzone
             label="Certificate background"
-            accept=".png,.jpg,.jpeg"
-            description="Upload the original certificate background image."
+            accept=".png,.jpg,.jpeg,.pdf"
+            description="Upload the original certificate background image or PDF template."
             onFileChange={setBackgroundFile}
           />
 

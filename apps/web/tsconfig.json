@@ -24,9 +24,10 @@
     "isolatedModules": true
   },
   "include": [
+    ".next/types/**/*.ts",
     "next-env.d.ts",
     "src/**/*",
-    ".next/types/**/*.ts"
+    "..\\..\\..\\..\\..\\AppData\\Local\\Temp\\certiflow-next-web/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
