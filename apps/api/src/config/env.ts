@@ -47,6 +47,7 @@ const envSchema = z.object({
   SMTP_HOST: z.string().optional().default(''),
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_ALLOW_INVALID_CERTS: z.coerce.boolean().default(false),
   SMTP_USER: z.string().optional().default(''),
   SMTP_PASS: z.string().optional().default(''),
   MAIL_FROM: z.string().default('CertiFlow <no-reply@certiflow.local>'),

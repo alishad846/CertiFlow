@@ -99,7 +99,7 @@ async function renderPdfAttachment(params: {
   overlayTemplate: string;
 }) {
   const pdfBytes = await fs.readFile(params.templatePath);
-  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBytes));
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const text = renderTemplateText(params.overlayTemplate, params.data);
 

@@ -1,11 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
-import sharp from 'sharp';
 import { randomUUID } from 'crypto';
 import { pool, withTransaction } from '../db/pool';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { ensureDir, safeSegment } from './fs';
+import { loadBackgroundSource } from './certificate-render';
 
 export type CertificateFieldConfig = {
   field: string;
@@ -16,6 +16,7 @@ export type CertificateFieldConfig = {
   fontFamily: string;
   color: string;
   align: 'left' | 'center' | 'right';
+  pageNumber?: number;
   text?: string;
 };
 
@@ -47,15 +48,67 @@ function toFileUrl(storedPath: string) {
   return `/files/${relative}`;
 }
 
-function normalizeFieldConfig(value: CertificateFieldConfig[] | string) {
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as CertificateFieldConfig[];
-    } catch {
-      return [];
-    }
+function isCertificateFieldConfig(value: unknown): value is CertificateFieldConfig {
+  if (!value || typeof value !== 'object') {
+    return false;
   }
-  return value ?? [];
+
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.field === 'string' &&
+    entry.field.trim().length > 0 &&
+    typeof entry.x === 'number' &&
+    Number.isFinite(entry.x) &&
+    typeof entry.y === 'number' &&
+    Number.isFinite(entry.y) &&
+    typeof entry.width === 'number' &&
+    Number.isFinite(entry.width) &&
+    entry.width > 0 &&
+    typeof entry.fontSize === 'number' &&
+    Number.isFinite(entry.fontSize) &&
+    entry.fontSize > 0 &&
+    typeof entry.fontFamily === 'string' &&
+    entry.fontFamily.trim().length > 0 &&
+    typeof entry.color === 'string' &&
+    entry.color.trim().length > 0 &&
+    (entry.align === 'left' || entry.align === 'center' || entry.align === 'right') &&
+    (entry.pageNumber === undefined ||
+      (typeof entry.pageNumber === 'number' &&
+        Number.isInteger(entry.pageNumber) &&
+        entry.pageNumber > 0))
+  );
+}
+
+function normalizeFieldConfig(value: CertificateFieldConfig[] | string) {
+  const parsed = (() => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        return [];
+      }
+    }
+    return value ?? [];
+  })();
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed
+    .filter(isCertificateFieldConfig)
+    .map((entry) => ({
+      field: entry.field,
+      x: entry.x,
+      y: entry.y,
+      width: entry.width,
+      fontSize: entry.fontSize,
+      fontFamily: entry.fontFamily,
+      color: entry.color,
+      align: entry.align,
+      ...(typeof entry.pageNumber === 'number' ? { pageNumber: entry.pageNumber } : {}),
+      ...(typeof entry.text === 'string' ? { text: entry.text } : {})
+    }));
 }
 
 function normalizeIssueDateMode(value: CertificateIssueDateMode | string | null | undefined): CertificateIssueDateMode {
@@ -67,6 +120,11 @@ function normalizeIssueDateValue(value: string | null | undefined) {
 }
 
 function mapTemplateRow(row: CertificateTemplateRow) {
+  const backgroundUrl =
+    path.extname(row.background_stored_path).toLowerCase() === '.pdf'
+      ? `/certificate-templates/${row.id}/background-preview`
+      : toFileUrl(row.background_stored_path);
+
   return {
     id: row.id,
     companyId: row.company_id,
@@ -80,7 +138,7 @@ function mapTemplateRow(row: CertificateTemplateRow) {
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    backgroundUrl: toFileUrl(row.background_stored_path),
+    backgroundUrl,
     backgroundOriginalName: row.background_original_name,
     backgroundStoredPath: row.background_stored_path
   };
@@ -159,7 +217,7 @@ export async function createCertificateTemplate(params: {
   const storedName = `${safeSegment(path.basename(params.backgroundOriginalName, ext)) || 'certificate'}${ext}`;
   const storedPath = path.join(uploadRoot, `${Date.now()}-${storedName}`);
   await fs.copyFile(params.backgroundFilePath, storedPath);
-  const metadata = await sharp(storedPath).metadata();
+  const backgroundSource = await loadBackgroundSource(storedPath);
 
   return withTransaction(async (client) => {
     const upload = await client.query<{ id: string }>(
@@ -191,8 +249,8 @@ export async function createCertificateTemplate(params: {
         JSON.stringify(params.fieldConfig ?? []),
         params.issueDateMode ?? 'current_date',
         normalizeIssueDateValue(params.issueDateValue),
-        metadata.width ?? 0,
-        metadata.height ?? 0,
+        backgroundSource.width,
+        backgroundSource.height,
         params.isActive ?? true,
         params.createdBy
       ]
@@ -290,12 +348,21 @@ export async function deleteCertificateTemplate(params: { templateId: string; co
       params.templateId,
       params.companyId
     ]);
-    await client.query('DELETE FROM uploads WHERE id = $1', [current.backgroundUploadId]);
-  });
 
-  if (current.backgroundStoredPath) {
-    await fs.rm(current.backgroundStoredPath, { force: true }).catch(() => undefined);
-  }
+    const uploadResult = await client.query<{ stored_path: string }>(
+      `DELETE FROM uploads u
+       WHERE u.id = $1
+         AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.excel_upload_id = u.id OR b.template_upload_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM batch_templates bt WHERE bt.upload_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM certificate_templates ct WHERE ct.background_upload_id = u.id)
+       RETURNING u.stored_path`,
+      [current.backgroundUploadId]
+    );
+
+    if (uploadResult.rows[0]?.stored_path) {
+      await fs.rm(uploadResult.rows[0].stored_path, { force: true }).catch(() => undefined);
+    }
+  });
 }
 
 export async function duplicateCertificateTemplate(params: {

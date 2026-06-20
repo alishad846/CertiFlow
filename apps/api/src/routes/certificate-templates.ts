@@ -20,7 +20,10 @@ import {
   updateCertificateTemplate
 } from '../services/certificate-templates';
 import { readExcelRecipients, buildTemplateContext } from '../services/excel';
-import { renderCertificatePdfPreview } from '../services/certificate-render';
+import {
+  renderCertificateBackgroundPreview,
+  renderCertificatePreviewPdf
+} from '../services/certificate-render';
 import { safeSegment } from '../services/fs';
 
 const router = Router();
@@ -39,12 +42,13 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'image/png',
-      'image/jpeg'
+      'image/jpeg',
+      'application/pdf'
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    const isImage = allowed.includes(file.mimetype) || ['.png', '.jpg', '.jpeg'].includes(ext);
-    if (!isImage) {
-      cb(new AppError('Only PNG and JPG files are allowed', 400));
+    const isSupported = allowed.includes(file.mimetype) || ['.png', '.jpg', '.jpeg', '.pdf'].includes(ext);
+    if (!isSupported) {
+      cb(new AppError('Only PNG, JPG, and PDF files are allowed', 400));
       return;
     }
     cb(null, true);
@@ -93,6 +97,7 @@ const fieldConfigSchema = z.array(
     fontFamily: z.string().min(1),
     color: z.string().min(1),
     align: z.enum(['left', 'center', 'right']),
+    pageNumber: z.number().int().positive().optional(),
     text: z.string().optional()
   })
 );
@@ -107,6 +112,7 @@ function parseFieldConfig(value: unknown): CertificateFieldConfig[] {
     fontFamily: entry.fontFamily,
     color: entry.color,
     align: entry.align,
+    ...(entry.pageNumber !== undefined ? { pageNumber: entry.pageNumber } : {}),
     ...(entry.text !== undefined ? { text: entry.text } : {})
   }));
 }
@@ -166,6 +172,34 @@ router.get(
       throw new AppError('Forbidden', 403);
     }
     res.json({ template });
+  })
+);
+
+router.get(
+  '/:id/background-preview',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  asyncHandler(async (req, res) => {
+    const template = await getCertificateTemplateById(String(req.params.id));
+    if (!template) {
+      throw new AppError('Certificate template not found', 404);
+    }
+    if (req.user?.role !== 'super_admin' && template.companyId !== req.user?.companyId) {
+      throw new AppError('Forbidden', 403);
+    }
+
+    const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+    const preview = await renderCertificateBackgroundPreview({
+      backgroundPath: template.backgroundStoredPath,
+      fields: [],
+      context: {},
+      pageNumber: page
+    });
+
+    res.setHeader('X-Page-Count', String(preview.pageCount));
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(preview.pngBuffer);
   })
 );
 
@@ -278,7 +312,7 @@ router.post(
         throw new AppError('The uploaded Excel file does not contain valid recipient rows', 400);
       }
 
-      const previewBuffer = await renderCertificatePdfPreview({
+      const previewBuffer = await renderCertificatePreviewPdf({
         backgroundPath: template.backgroundStoredPath,
         fields: template.fieldConfig,
         context: {
@@ -287,7 +321,7 @@ router.post(
         }
       });
 
-      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Cache-Control', 'no-store');
       res.send(previewBuffer);
     } finally {

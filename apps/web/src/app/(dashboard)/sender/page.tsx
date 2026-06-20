@@ -20,6 +20,7 @@ type EmailSettingsResponse = {
     smtpHost: string | null;
     smtpPort: number | null;
     smtpSecure: boolean | null;
+    smtpAllowInvalidCerts: boolean | null;
     smtpUser: string | null;
     enabled: boolean | null;
     updatedAt: string | null;
@@ -45,6 +46,7 @@ export default function SenderSettingsPage() {
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState('587');
   const [smtpSecure, setSmtpSecure] = useState(false);
+  const [smtpAllowInvalidCerts, setSmtpAllowInvalidCerts] = useState(false);
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
   const [enabled, setEnabled] = useState(true);
@@ -52,6 +54,16 @@ export default function SenderSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const handleSmtpPortChange = (value: string) => {
+    setSmtpPort(value);
+    const normalizedPort = Number(value);
+    if (normalizedPort === 465) {
+      setSmtpSecure(true);
+    } else if (normalizedPort === 587) {
+      setSmtpSecure(false);
+    }
+  };
 
   const loadSettings = async (targetCompanyId = companyId) => {
     const resolvedCompanyId = targetCompanyId.trim();
@@ -68,6 +80,7 @@ export default function SenderSettingsPage() {
       setSmtpHost(response.settings?.smtpHost ?? '');
       setSmtpPort(String(response.settings?.smtpPort ?? 587));
       setSmtpSecure(Boolean(response.settings?.smtpSecure));
+      setSmtpAllowInvalidCerts(Boolean(response.settings?.smtpAllowInvalidCerts));
       setSmtpUser(response.settings?.smtpUser ?? '');
       setEnabled(response.settings?.enabled ?? true);
       setLastUpdated(response.settings?.updatedAt ?? null);
@@ -130,6 +143,7 @@ export default function SenderSettingsPage() {
           smtpHost: smtpHost.trim(),
           smtpPort: Number(smtpPort),
           smtpSecure,
+          smtpAllowInvalidCerts,
           smtpUser: smtpUser.trim(),
           smtpPass: smtpPass.trim() || undefined,
           enabled
@@ -194,7 +208,21 @@ export default function SenderSettingsPage() {
           </label>
           <label className="space-y-2">
             <span className="text-sm font-semibold text-slate-700">SMTP port</span>
-            <Input type="number" min="1" value={smtpPort} onChange={(event) => setSmtpPort(event.target.value)} placeholder="587" />
+            <Input type="number" min="1" value={smtpPort} onChange={(event) => handleSmtpPortChange(event.target.value)} placeholder="587" />
+          </label>
+          <label className="flex items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={smtpSecure}
+              onChange={(event) => setSmtpSecure(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+            />
+            <span className="space-y-1">
+              <span className="block text-sm font-semibold text-slate-700">Use secure SMTP connection</span>
+              <span className="block text-xs leading-5 text-slate-500">
+                Usually enable this for port 465. Leave it off for port 587 unless your SMTP provider explicitly requires it.
+              </span>
+            </span>
           </label>
           <label className="space-y-2">
             <span className="text-sm font-semibold text-slate-700">SMTP username</span>
@@ -210,6 +238,21 @@ export default function SenderSettingsPage() {
             />
           </label>
         </div>
+
+        <label className="mt-4 flex items-start gap-3 rounded-[20px] border border-slate-200 bg-slate-50 p-4">
+          <input
+            type="checkbox"
+            checked={smtpAllowInvalidCerts}
+            onChange={(event) => setSmtpAllowInvalidCerts(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-semibold text-slate-700">Allow invalid SMTP certificates</span>
+            <span className="block text-xs leading-5 text-slate-500">
+              Use this only for local, test, or private SMTP servers with self-signed certificates.
+            </span>
+          </span>
+        </label>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button variant={enabled ? 'primary' : 'secondary'} onClick={() => setEnabled((current) => !current)}>

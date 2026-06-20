@@ -5,10 +5,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   output: 'standalone',
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   transpilePackages: ['@certiflow/shared'],
-  allowedDevOrigins: ['http://localhost:3000', 'http://192.168.56.1:3000'],
+  allowedDevOrigins: ['localhost', '127.0.0.1', '::1', '*.localhost', '10.*.*.*', '172.*.*.*', '192.168.*.*'],
+  webpack(config, { dev }) {
+    if (dev) {
+      // Disable webpack's on-disk cache in dev to avoid flaky OneDrive/FS rename errors.
+      config.cache = false;
+    }
+
+    return config;
+  },
   async headers() {
     return [
       {

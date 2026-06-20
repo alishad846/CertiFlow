@@ -1,16 +1,5 @@
 import type { Metadata } from 'next';
-import { Manrope, Space_Grotesk } from 'next/font/google';
 import './globals.css';
-
-const headingFont = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-heading'
-});
-
-const bodyFont = Manrope({
-  subsets: ['latin'],
-  variable: '--font-body'
-});
 
 export const metadata: Metadata = {
   title: 'CertiFlow',
@@ -21,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${headingFont.variable} ${bodyFont.variable}`}>
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

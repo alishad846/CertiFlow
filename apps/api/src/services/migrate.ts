@@ -147,6 +147,7 @@ const migrationStatements = [
      smtp_host text,
      smtp_port integer NOT NULL DEFAULT 587,
      smtp_secure boolean NOT NULL DEFAULT false,
+     smtp_allow_invalid_certs boolean NOT NULL DEFAULT false,
      smtp_user text,
      smtp_pass text,
      enabled boolean NOT NULL DEFAULT false,
@@ -163,6 +164,8 @@ const migrationStatements = [
      ADD COLUMN IF NOT EXISTS smtp_port integer NOT NULL DEFAULT 587`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_secure boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS smtp_allow_invalid_certs boolean NOT NULL DEFAULT false`,
   `ALTER TABLE IF EXISTS company_email_settings
      ADD COLUMN IF NOT EXISTS smtp_user text`,
   `ALTER TABLE IF EXISTS company_email_settings
