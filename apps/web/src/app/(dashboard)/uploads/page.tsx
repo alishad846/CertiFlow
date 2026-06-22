@@ -39,7 +39,12 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+<<<<<<< Updated upstream
   const [previewMimeType, setPreviewMimeType] = useState('');
+=======
+  const [templateType, setTemplateType] = useState<'certificate' | 'offer_letter'>('certificate');
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
+>>>>>>> Stashed changes
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -166,6 +171,10 @@ export default function UploadPage() {
               if (selectedTemplateId) form.append('certificateTemplateId', selectedTemplateId);
               if (companyId) form.append('companyId', companyId);
               if (excelFile) form.append('excelFile', excelFile);
+              form.append('templateType', templateType);
+              if (templateType === 'offer_letter' && templateFile) {
+                form.append('templateFile', templateFile);
+              }
               attachments.forEach((file) => form.append('attachments', file));
 
               const result = await apiFetch<{ batchId: string; totalRows: number; message: string }>('/batches', {
@@ -190,6 +199,7 @@ export default function UploadPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
+<<<<<<< Updated upstream
               <label className="mb-2 block text-sm font-medium text-slate-700">Template</label>
               <select
                 value={selectedTemplateId}
@@ -214,6 +224,38 @@ export default function UploadPage() {
                   {selectedTemplate.imageHeight}
                 </p>
               ) : null}
+=======
+              <p className="text-sm font-medium text-slate-700">Template</p>
+              <div className="mt-2 flex gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="templateType"
+                    value="certificate"
+                    checked={templateType === 'certificate'}
+                    onChange={() => setTemplateType('certificate')}
+                    className="h-4 w-4 text-accent-600 focus:ring-accent-500"
+                  />
+                  Certificate (Editor)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="templateType"
+                    value="offer_letter"
+                    checked={templateType === 'offer_letter'}
+                    onChange={() => setTemplateType('offer_letter')}
+                    className="h-4 w-4 text-accent-600 focus:ring-accent-500"
+                  />
+                  Custom Document (DOCX)
+                </label>
+              </div>
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                {templateType === 'certificate' 
+                  ? 'Certificate templates use the active background image from the editor.'
+                  : 'Upload a custom DOCX file. Use {{ColumnName}} inside the document for dynamic data replacement.'}
+              </div>
+>>>>>>> Stashed changes
             </div>
 
             {role === 'super_admin' ? (
@@ -256,6 +298,15 @@ export default function UploadPage() {
               onFileChange={setExcelFile}
             />
 
+            {templateType === 'offer_letter' ? (
+              <FileDropzone
+                label="DOCX Template"
+                accept=".docx"
+                description="Upload the DOCX template file to be used for this batch."
+                onFileChange={setTemplateFile}
+              />
+            ) : null}
+
             <FileDropzone
               label="Extra attachments"
               accept=".pdf,.png,.jpg,.jpeg"
@@ -271,6 +322,7 @@ export default function UploadPage() {
           </div>
           
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+<<<<<<< Updated upstream
               <Button
               type="button"
               variant="secondary"
@@ -279,6 +331,17 @@ export default function UploadPage() {
                 if (!excelFile) {
                   return;
                 }
+=======
+            {templateType === 'certificate' && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!excelFile || previewLoading}
+                onClick={async () => {
+                  if (!excelFile) {
+                    return;
+                  }
+>>>>>>> Stashed changes
                 setPreviewLoading(true);
                 try {
                   const form = new FormData();
@@ -315,8 +378,9 @@ export default function UploadPage() {
             >
               <Sparkles className="mr-2 h-4 w-4" />
               {previewLoading ? 'Generating preview...' : 'Generate Sample Preview'}
-            </Button>
-            <Button type="submit" disabled={loading} className="sm:min-w-[220px]">
+              </Button>
+            )}
+            <Button type="submit" disabled={loading || (templateType === 'offer_letter' && !templateFile)} className="sm:min-w-[220px]">
               <UploadCloud className="mr-2 h-4 w-4" />
               {loading ? 'Queuing batch...' : 'Generate documents'}
             </Button>

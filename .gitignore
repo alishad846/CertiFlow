@@ -8,5 +8,5 @@ coverage
 apps/api/uploads/*
 !apps/api/uploads/.gitkeep
 apps/web/.next
-
+apps/api/apps/api/uploads/*
 
