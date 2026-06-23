@@ -39,12 +39,9 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
-<<<<<<< Updated upstream
   const [previewMimeType, setPreviewMimeType] = useState('');
-=======
   const [templateType, setTemplateType] = useState<'certificate' | 'offer_letter'>('certificate');
   const [templateFile, setTemplateFile] = useState<File | null>(null);
->>>>>>> Stashed changes
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -199,33 +196,7 @@ export default function UploadPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-<<<<<<< Updated upstream
-              <label className="mb-2 block text-sm font-medium text-slate-700">Template</label>
-              <select
-                value={selectedTemplateId}
-                onChange={(event) => setSelectedTemplateId(event.target.value)}
-                disabled={templatesLoading || !templates.length}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-accent-400 focus:ring-4 focus:ring-accent-100 disabled:cursor-not-allowed disabled:bg-slate-50"
-              >
-                <option value="">{templatesLoading ? 'Loading templates...' : 'Choose a template'}</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                    {template.isActive ? ' (Active)' : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                Pick the certificate template you edited. If you leave this blank, the active certificate template will be used.
-              </p>
-              {selectedTemplate ? (
-                <p className="mt-2 text-xs font-medium text-slate-600">
-                  Selected: {selectedTemplate.name} {selectedTemplate.isActive ? '(Active)' : ''} - {selectedTemplate.imageWidth} x{' '}
-                  {selectedTemplate.imageHeight}
-                </p>
-              ) : null}
-=======
-              <p className="text-sm font-medium text-slate-700">Template</p>
+              <p className="text-sm font-medium text-slate-700">Template Type</p>
               <div className="mt-2 flex gap-4">
                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                   <input
@@ -250,12 +221,39 @@ export default function UploadPage() {
                   Custom Document (DOCX)
                 </label>
               </div>
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                {templateType === 'certificate' 
-                  ? 'Certificate templates use the active background image from the editor.'
-                  : 'Upload a custom DOCX file. Use {{ColumnName}} inside the document for dynamic data replacement.'}
-              </div>
->>>>>>> Stashed changes
+
+              {templateType === 'certificate' ? (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Choose Certificate Template</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(event) => setSelectedTemplateId(event.target.value)}
+                    disabled={templatesLoading || !templates.length}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-accent-400 focus:ring-4 focus:ring-accent-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  >
+                    <option value="">{templatesLoading ? 'Loading templates...' : 'Choose a template'}</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                        {template.isActive ? ' (Active)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs leading-5 text-slate-500">
+                    Pick the certificate template you edited. If you leave this blank, the active certificate template will be used.
+                  </p>
+                  {selectedTemplate ? (
+                    <p className="text-xs font-medium text-slate-600">
+                      Selected: {selectedTemplate.name} {selectedTemplate.isActive ? '(Active)' : ''} - {selectedTemplate.imageWidth} x{' '}
+                      {selectedTemplate.imageHeight}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Upload a custom DOCX file. Use {'{{ColumnName}}'} inside the document for dynamic data replacement.
+                </div>
+              )}
             </div>
 
             {role === 'super_admin' ? (
@@ -322,16 +320,6 @@ export default function UploadPage() {
           </div>
           
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-<<<<<<< Updated upstream
-              <Button
-              type="button"
-              variant="secondary"
-              disabled={!excelFile || previewLoading}
-              onClick={async () => {
-                if (!excelFile) {
-                  return;
-                }
-=======
             {templateType === 'certificate' && (
               <Button
                 type="button"
@@ -341,7 +329,6 @@ export default function UploadPage() {
                   if (!excelFile) {
                     return;
                   }
->>>>>>> Stashed changes
                 setPreviewLoading(true);
                 try {
                   const form = new FormData();

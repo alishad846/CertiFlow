@@ -5,11 +5,11 @@
   "scripts": {
     "reset:next-cache": "node -e \"const fs=require('node:fs'); const path=require('node:path'); const nextDir=path.join(process.cwd(),'.next'); try { fs.rmSync(nextDir,{recursive:true,force:true,maxRetries:5,retryDelay:100}); } catch (error) { if (fs.existsSync(nextDir)) { console.warn('Unable to fully clear .next cache, continuing.'); } } fs.mkdirSync(nextDir,{recursive:true});\"",
     "predev": "npm run reset:next-cache",
-    "dev": "node --max_old_space_size=4096 ./node_modules/next/dist/bin/next dev -p 3000",
+    "dev": "node --max_old_space_size=4096 ../../node_modules/next/dist/bin/next dev -p 3000",
     "prebuild": "npm run reset:next-cache",
-    "build": "node --max_old_space_size=4096 ./node_modules/next/dist/bin/next build",
+    "build": "node --max_old_space_size=4096 ../../node_modules/next/dist/bin/next build",
     "prestart": "npm run reset:next-cache",
-    "start": "node --max_old_space_size=4096 ./node_modules/next/dist/bin/next start -p 3000"
+    "start": "node --max_old_space_size=4096 ../../node_modules/next/dist/bin/next start -p 3000"
   },
   "dependencies": {
     "@certiflow/shared": "file:../../packages/shared",
