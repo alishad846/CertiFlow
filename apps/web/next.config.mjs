@@ -9,12 +9,24 @@ const nextConfig = {
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   transpilePackages: ['@certiflow/shared'],
   allowedDevOrigins: [
+    'localhost:3000',
+    'localhost',
+    '127.0.0.1:3000',
+    '127.0.0.1',
+    '192.168.0.106:3000',
+    '192.168.0.106',
+    '192.168.0.105:3000',
+    '192.168.0.105',
+    '192.168.56.1:3000',
+    '192.168.56.1',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://192.168.0.106:3000',
+    'http://192.168.0.106',
+    'http://192.168.0.105:3000',
+    'http://192.168.0.105',
     'http://192.168.56.1:3000',
-    'http://192.168.56.1',
-    'http://192.168.56.1:3001',
-    'http://127.0.0.1:3001'
+    'http://192.168.56.1'
   ],
   async headers() {
     return [
@@ -24,9 +36,7 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' }
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' }
         ]
       }
     ];

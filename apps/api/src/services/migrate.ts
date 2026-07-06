@@ -316,7 +316,16 @@ const migrationStatements = [
   `ALTER TABLE IF EXISTS pricing_plans
      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()`,
   `ALTER TABLE IF EXISTS pricing_plans
-     ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW()`
+     ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW()`,
+  `CREATE TABLE IF NOT EXISTS password_resets (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     email text NOT NULL,
+     otp text NOT NULL,
+     expires_at timestamptz NOT NULL,
+     used boolean NOT NULL DEFAULT false,
+     created_at timestamptz NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_password_resets_email_otp ON password_resets(email, otp)`
 ];
 
 export async function migrateDatabaseSchema() {

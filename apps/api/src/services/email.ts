@@ -304,3 +304,83 @@ export async function sendEmail(params: SendEmailParams) {
 
   throw new AppError('Email sender configuration is invalid for this company', 500);
 }
+
+export async function sendSystemEmail(params: { to: string; subject: string; html: string; recipientName?: string }) {
+  if (env.EMAIL_PROVIDER === 'n8n' && env.N8N_WEBHOOK_URL) {
+    await axios.post(env.N8N_WEBHOOK_URL, {
+      from: env.MAIL_FROM,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      recipientName: params.recipientName ?? ''
+    });
+    return;
+  }
+  if (env.EMAIL_PROVIDER === 'resend' && env.RESEND_API_KEY) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.RESEND_FROM,
+        to: params.to,
+        subject: params.subject,
+        html: params.html
+      })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new AppError(payload?.message ?? 'Resend request failed', response.status);
+    }
+    return;
+  }
+
+  if (!env.SMTP_HOST) {
+    throw new AppError('System SMTP host is not configured in .env', 500);
+  }
+
+  const port = env.SMTP_PORT;
+  const secure = port === 465 ? true : port === 587 ? false : env.SMTP_SECURE;
+
+  const transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port,
+    secure,
+    tls: env.SMTP_ALLOW_INVALID_CERTS ? { rejectUnauthorized: false } : undefined,
+    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
+  });
+
+  try {
+    await transporter.sendMail({
+      from: env.MAIL_FROM,
+      to: params.to,
+      subject: params.subject,
+      html: params.html
+    });
+  } catch (error) {
+    throw new AppError(getSmtpErrorMessage(error, 'Failed to send email via SMTP'), 500);
+  }
+}
+
+export function getOtpEmailHtml(otp: string, userName: string) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #1f56a8; margin: 0; font-size: 24px;">CertiFlow</h2>
+        <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Password Reset Request</p>
+      </div>
+      <p style="color: #334155; font-size: 16px; line-height: 1.5;">Hello ${userName},</p>
+      <p style="color: #334155; font-size: 16px; line-height: 1.5;">We received a request to reset your password. Use the verification code below to complete the process:</p>
+      <div style="margin: 32px 0; text-align: center;">
+        <div style="display: inline-block; padding: 16px 32px; background-color: #f1f5f9; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0f172a; border: 2px dashed #cbd5e1;">
+          ${otp}
+        </div>
+      </div>
+      <p style="color: #64748b; font-size: 14px; line-height: 1.5;">This verification code will expire in <strong>15 minutes</strong>. If you did not request a password reset, please ignore this email.</p>
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+      <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">&copy; ${new Date().getFullYear()} CertiFlow. All rights reserved.</p>
+    </div>
+  `;
+}

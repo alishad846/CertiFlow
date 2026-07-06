@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../lib/rate-limit';
 import { getCompanyAccess } from '../services/companies';
+import { sendSystemEmail, getOtpEmailHtml } from '../services/email';
 
 const router = Router();
 
@@ -219,6 +220,91 @@ router.post(
     const token = issueToken(payload);
     setAuthCookie(res, token);
     res.json({ user: payload });
+  })
+);
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  newPassword: z.string().min(8)
+});
+
+router.post(
+  '/forgot-password',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'Too many password reset requests.'
+  }),
+  asyncHandler(async (req, res) => {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const userResult = await pool.query<{ id: string; name: string }>('SELECT id, name FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
+    if (!user) {
+      throw new AppError('No account found with this email address', 404);
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await pool.query(
+      `INSERT INTO password_resets (email, otp, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '15 minutes')`,
+      [email, otp]
+    );
+
+    const html = getOtpEmailHtml(otp, user.name);
+    await sendSystemEmail({
+      to: email,
+      subject: 'CertiFlow - Password Reset Code',
+      html,
+      recipientName: user.name
+    });
+
+    res.json({ ok: true, message: 'OTP sent to registered email' });
+  })
+);
+
+router.post(
+  '/reset-password',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'Too many password reset attempts.'
+  }),
+  asyncHandler(async (req, res) => {
+    const { email, otp, newPassword } = resetPasswordSchema.parse(req.body);
+
+    const resetResult = await pool.query<{ id: string }>(
+      `SELECT id FROM password_resets
+       WHERE email = $1 AND otp = $2 AND used = false AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [email, otp]
+    );
+
+    const resetRecord = resetResult.rows[0];
+    if (!resetRecord) {
+      throw new AppError('Invalid or expired verification code', 400);
+    }
+
+    await pool.query('UPDATE password_resets SET used = true WHERE id = $1', [resetRecord.id]);
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const userResult = await pool.query<{ id: string }>(
+      `UPDATE users
+       SET password_hash = $1, token_version = token_version + 1, updated_at = NOW()
+       WHERE email = $2
+       RETURNING id`,
+      [passwordHash, email]
+    );
+
+    if (!userResult.rows[0]) {
+      throw new AppError('User account no longer exists', 404);
+    }
+
+    res.json({ ok: true, message: 'Password reset successfully' });
   })
 );
 

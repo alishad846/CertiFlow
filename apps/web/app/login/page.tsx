@@ -55,9 +55,14 @@ export default function LoginPage() {
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="login-password">
-              Password
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className={styles.label} htmlFor="login-password">
+                Password
+              </label>
+              <Link href="/forgot-password" className={styles.link} style={{ fontSize: '0.85rem' }}>
+                Forgot password?
+              </Link>
+            </div>
             <input
               id="login-password"
               type="password"

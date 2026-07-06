@@ -9,7 +9,8 @@
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node --max_old_space_size=4096 dist/index.js",
-    "start:worker": "node --max_old_space_size=4096 dist/worker.js"
+    "start:worker": "node --max_old_space_size=4096 dist/worker.js",
+    "db:reset": "tsx src/scripts/reset-db.ts"
   },
   "dependencies": {
     "@certiflow/shared": "file:../../packages/shared",
