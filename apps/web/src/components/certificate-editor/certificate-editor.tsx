@@ -1,13 +1,25 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  Plus,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+  Save,
+  X,
+  FileSpreadsheet,
+  Wand2,
+  Move
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { getTemplatePreviewSrc } from '@/lib/template-preview';
 import type { CertificateFieldConfig, CertificateIssueDateMode } from '@/types/certificate';
 
+/*
 const supportedFields = [
   { field: 'name', label: 'Name' },
   { field: 'email', label: 'Email' },
@@ -17,11 +29,13 @@ const supportedFields = [
   { field: 'roll_no', label: 'Roll No' },
   { field: 'issue_date', label: 'Issue Date' }
 ] as const;
+*/
 
 const DEFAULT_FREE_TEXT = 'Type your text here';
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 220;
 const FONT_SIZE_STEP = 2;
+const SNAP_DISTANCE = 8;
 
 const defaultFieldStyle: CertificateFieldConfig = {
   field: 'name',
@@ -130,6 +144,33 @@ export function CertificateEditor({
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const [name, setName] = useState(template.name);
   const [fields, setFields] = useState<EditorFieldConfig[]>([]);
+  const [history, setHistory] = useState<EditorFieldConfig[][]>([]);
+
+const [availableFields, setAvailableFields] = useState<
+  {
+    field: string;
+    label: string;
+  }[]
+>([]);
+
+const [excelFile, setExcelFile] =
+  useState<File | null>(null);
+
+const [detectingFields, setDetectingFields] =
+  useState(false);
+
+const [showGuides, setShowGuides] =
+  useState(true);
+  const [guideLines, setGuideLines] = useState<{
+  vertical: number | null;
+  horizontal: number | null;
+}>({
+  vertical: null,
+  horizontal: null
+});
+
+const [snapEnabled, setSnapEnabled] =
+  useState(true);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
@@ -149,6 +190,15 @@ export function CertificateEditor({
     offsetX: number;
     offsetY: number;
   } | null>(null);
+  const [dragPlaceholder, setDragPlaceholder] = useState<{
+  field: string;
+  label: string;
+} | null>(null);
+const [resizeState, setResizeState] = useState<{
+  field: string;
+  startX: number;
+  startWidth: number;
+} | null>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
@@ -227,6 +277,27 @@ export function CertificateEditor({
     }
 
     const handleMove = (event: PointerEvent) => {
+      if (resizeState) {
+
+  const delta =
+    (event.clientX - resizeState.startX) / displayZoom;
+
+  setFields((current) =>
+    current.map((field) =>
+      field.id === resizeState.field
+        ? {
+            ...field,
+            width: Math.max(
+              40,
+              resizeState.startWidth + delta
+            )
+          }
+        : field
+    )
+  );
+
+  return;
+}
       const container = pageRefs.current[dragState.pageNumber];
       if (!container) {
         return;
@@ -234,8 +305,63 @@ export function CertificateEditor({
       const rect = container.getBoundingClientRect();
       const pointerX = (event.clientX - rect.left) / displayZoom;
       const pointerY = (event.clientY - rect.top) / displayZoom;
-      const nextX = Math.max(0, pointerX - dragState.offsetX);
-      const nextY = Math.max(0, pointerY - dragState.offsetY);
+      let nextX = Math.max(0, pointerX - dragState.offsetX);
+let nextY = Math.max(0, pointerY - dragState.offsetY);
+const currentField = fields.find(
+  (f) => f.id === dragState.field
+);
+
+const otherFields = fields.filter(
+  (f) => f.id !== dragState.field
+);
+
+if (snapEnabled) {
+
+  const centerX = stageWidth / 2;
+
+  const centerY = stageHeight / 2;
+
+  let vertical = null;
+
+  let horizontal = null;
+
+  if (Math.abs(nextX - centerX) < SNAP_DISTANCE) {
+    nextX = centerX;
+    vertical = centerX;
+  }
+
+  if (Math.abs(nextY - centerY) < SNAP_DISTANCE) {
+    nextY = centerY;
+    horizontal = centerY;
+  }
+
+  otherFields.forEach((field) => {
+
+  if (Math.abs(nextX - field.x) < SNAP_DISTANCE) {
+    nextX = field.x;
+    vertical = field.x;
+  }
+
+  if (Math.abs(nextY - field.y) < SNAP_DISTANCE) {
+    nextY = field.y;
+    horizontal = field.y;
+  }
+
+});
+  setGuideLines({
+    vertical,
+    horizontal
+  });
+
+} else {
+
+  setGuideLines({
+    vertical: null,
+    horizontal: null
+  });
+  
+
+}
       setFields((current) =>
         current.map((field) =>
           field.id === dragState.field
@@ -250,8 +376,9 @@ export function CertificateEditor({
     };
 
     const handleUp = () => {
-      setDragState(null);
-    };
+  setDragState(null);
+  setResizeState(null);
+};
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
@@ -264,6 +391,86 @@ export function CertificateEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Delete") {
+  event.preventDefault();
+
+  if (selectedField) {
+    removeSelected();
+  }
+
+  return;
+}
+
+if (event.ctrlKey && event.key.toLowerCase() === "d") {
+  event.preventDefault();
+
+  const field = fields.find(f => f.id === selectedField);
+
+  if (!field) return;
+
+  const copy: EditorFieldConfig = {
+    ...field,
+    id: createEditorFieldId(field.field, fields.length),
+    x: field.x + 20,
+    y: field.y + 20
+  };
+
+  setFields(prev => [...prev, copy]);
+  setSelectedField(copy.id);
+
+  return;
+}
+
+if (
+  ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+) {
+  if (!selectedField) return;
+
+  event.preventDefault();
+
+  const step = event.shiftKey ? 10 : 1;
+
+  setFields((current) =>
+    current.map((field) => {
+      if (field.id !== selectedField) return field;
+
+      switch (event.key) {
+        case "ArrowUp":
+          return { ...field, y: field.y - step };
+
+        case "ArrowDown":
+          return { ...field, y: field.y + step };
+
+        case "ArrowLeft":
+          return { ...field, x: field.x - step };
+
+        case "ArrowRight":
+          return { ...field, x: field.x + step };
+
+        default:
+          return field;
+      }
+    })
+  );
+
+  return;
+}
+
+if (event.ctrlKey && event.key.toLowerCase() === "z") {
+  event.preventDefault();
+
+  if (history.length === 0) {
+    return;
+  }
+
+  const previous = history[history.length - 1];
+
+  setFields(previous);
+
+  setHistory((prev) => prev.slice(0, -1));
+
+  return;
+}
       if (!selectedField || !event.ctrlKey) {
         return;
       }
@@ -384,8 +591,47 @@ export function CertificateEditor({
     setFields((current) => current.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
   };
 
+const detectExcelFields = async () => {
+  if (!excelFile) {
+    alert("Upload an Excel file first.");
+    return;
+  }
+
+  try {
+    setDetectingFields(true);
+
+    const form = new FormData();
+
+    form.append("excelFile", excelFile);
+
+    const response = await apiFetch<{
+      fields: {
+        field: string;
+        label: string;
+      }[];
+    }>("/certificate-templates/extract-fields", {
+      method: "POST",
+      body: form
+    });
+
+    setAvailableFields(response.fields);
+    console.log("Detected Fields:", response.fields);
+  } catch (err) {
+    alert(
+      err instanceof Error
+        ? err.message
+        : "Failed to detect fields"
+    );
+  } finally {
+    setDetectingFields(false);
+  }
+};
+
   const addField = (fieldName: string) => {
     const normalizedField = fieldName.trim();
+    if (fields.some((f) => f.field === normalizedField)) {
+  return;
+}
     if (!normalizedField) {
       return;
     }
@@ -401,10 +647,13 @@ export function CertificateEditor({
     };
 
     setSelectedField(id);
-    setFields((current) => [...current, nextField]);
+    setHistory((prev) => [...prev, fields]);
+
+setFields((current) => [...current, nextField]);
   };
 
   const addFreeTextField = (text: string) => {
+    
     const trimmedText = text.trim();
     const nextText = trimmedText || DEFAULT_FREE_TEXT;
     const id = createEditorFieldId('text', fields.length);
@@ -422,9 +671,88 @@ export function CertificateEditor({
     };
 
     setSelectedField(id);
-    setFields((current) => [...current, nextField]);
-  };
+    setHistory((prev) => [...prev, fields]);
 
+setFields((current) => [...current, nextField]);
+  };
+const autoArrangeFields = () => {
+
+  if (availableFields.length === 0) return;
+
+  const startX = stageWidth * 0.25;
+
+  let currentY = stageHeight * 0.28;
+
+  const gap = 70;
+
+  const generated: EditorFieldConfig[] = [];
+
+  availableFields.forEach((item, index) => {
+
+  let x = stageWidth / 2 - 120;
+
+  let y = stageHeight / 2;
+
+  const field = item.field.toLowerCase();
+
+  if (field.includes("name")) {
+    y = stageHeight * 0.45;
+  }
+
+  else if (field.includes("course")) {
+    y = stageHeight * 0.55;
+  }
+
+  else if (field.includes("department")) {
+    y = stageHeight * 0.60;
+  }
+
+  else if (field.includes("college")) {
+    y = stageHeight * 0.65;
+  }
+
+  else if (field.includes("roll")) {
+    x = stageWidth * 0.18;
+    y = stageHeight * 0.78;
+  }
+
+  else if (field.includes("score")) {
+    x = stageWidth * 0.72;
+    y = stageHeight * 0.78;
+  }
+
+  else if (field.includes("date")) {
+    x = stageWidth * 0.70;
+    y = stageHeight * 0.90;
+  }
+
+  generated.push({
+
+    ...defaultFieldStyle,
+
+    id: createEditorFieldId(item.field, index),
+
+    field: item.field,
+
+    pageNumber: activePage,
+
+    x,
+
+    y,
+
+    width: getPlaceholderFieldWidth(item.field)
+
+  });
+
+    currentY += gap;
+
+  });
+
+  setFields(generated);
+
+  setSelectedField(generated[0]?.id ?? null);
+
+};
   const changeSelectedFontSize = (delta: number) => {
     if (!selectedField) {
       return;
@@ -438,12 +766,18 @@ export function CertificateEditor({
   };
 
   const removeSelected = () => {
-    if (!selectedField) {
-      return;
-    }
-    setFields((current) => current.filter((field) => field.id !== selectedField));
-    setSelectedField(null);
-  };
+  if (!selectedField) {
+    return;
+  }
+
+  setHistory((prev) => [...prev, fields]);
+
+  setFields((current) =>
+    current.filter((field) => field.id !== selectedField)
+  );
+
+  setSelectedField(null);
+};
 
   return (
     <div
@@ -515,6 +849,46 @@ export function CertificateEditor({
                 ref={(element) => {
                   pageRefs.current[page.pageNumber] = element;
                 }}
+                onDragOver={(event) => {
+  event.preventDefault();
+}}
+
+onDrop={(event) => {
+  event.preventDefault();
+
+  if (!dragPlaceholder) return;
+
+  const rect = event.currentTarget.getBoundingClientRect();
+
+  const x =
+    (event.clientX - rect.left) / displayZoom;
+
+  const y =
+    (event.clientY - rect.top) / displayZoom;
+
+  const id = createEditorFieldId(
+    dragPlaceholder.field,
+    fields.length
+  );
+
+  const newField: EditorFieldConfig = {
+    ...defaultFieldStyle,
+    id,
+    field: dragPlaceholder.field,
+    pageNumber: page.pageNumber,
+    x,
+    y,
+    width: getPlaceholderFieldWidth(
+      dragPlaceholder.field
+    )
+  };
+
+  setFields((prev) => [...prev, newField]);
+
+  setSelectedField(id);
+
+  setDragPlaceholder(null);
+}}
                 onPointerDown={() => setActivePage(page.pageNumber)}
                 className={`relative overflow-hidden rounded-[18px] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
                   isActivePage ? 'border-2 border-accent-500' : 'border border-slate-300'
@@ -530,6 +904,27 @@ export function CertificateEditor({
                   className="absolute inset-0 h-full w-full select-none object-fill"
                   draggable={false}
                 />
+                {showGuides && guideLines.vertical !== null && (
+
+<div
+className="absolute top-0 bottom-0 w-[2px] bg-blue-500 opacity-70 pointer-events-none"
+style={{
+left: guideLines.vertical * displayZoom
+}}
+/>
+
+)}
+
+{showGuides && guideLines.horizontal !== null && (
+
+<div
+className="absolute left-0 right-0 h-[2px] bg-blue-500 opacity-70 pointer-events-none"
+style={{
+top: guideLines.horizontal * displayZoom
+}}
+/>
+
+)}
 
                 <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">
                   Page {page.pageNumber}
@@ -571,7 +966,7 @@ export function CertificateEditor({
                           offsetY: pointerY - field.y
                         });
                       }}
-                      className={`absolute cursor-move select-none rounded-md px-1 py-0.5 transition ${
+                      className={`absolute cursor-grab active:cursor-grabbing select-none rounded-md px-1 py-0.5 transition-all duration-75 ${
                         isSelected
                           ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent'
                           : 'hover:ring-1 hover:ring-accent-200'
@@ -607,6 +1002,20 @@ export function CertificateEditor({
                       >
                         {displayText}
                       </span>
+                      {isSelected && (
+  <div
+    onPointerDown={(event) => {
+      event.stopPropagation();
+
+      setResizeState({
+        field: field.id,
+        startX: event.clientX,
+        startWidth: field.width
+      });
+    }}
+    className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-blue-500 shadow"
+  />
+)}
                     </div>
                   );
                 })}
@@ -623,6 +1032,35 @@ export function CertificateEditor({
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Editing tools</p>
               <p className="mt-1 text-xs font-medium text-slate-400">Drag, add, edit</p>
+              <div className="mt-5 space-y-3">
+
+  <label className="text-sm font-medium">
+    Excel File
+  </label>
+
+  <input
+    type="file"
+    accept=".xlsx,.xls,.csv"
+    onChange={(e) =>
+      setExcelFile(e.target.files?.[0] ?? null)
+    }
+    className="w-full rounded-xl border border-slate-200 p-3"
+  />
+
+  <Button
+    type="button"
+    onClick={detectExcelFields}
+    disabled={detectingFields}
+    className="w-full"
+  >
+    <FileSpreadsheet className="mr-2 h-4 w-4" />
+
+    {detectingFields
+      ? "Detecting..."
+      : "Detect Excel Fields"}
+  </Button>
+
+</div>
             </div>
           </div>
 
@@ -647,17 +1085,46 @@ export function CertificateEditor({
           ) : null}
 
           <div className="mt-4 space-y-2">
-            {supportedFields.map((item) => (
-              <button
-                key={item.field}
-                type="button"
-                onClick={() => addField(item.field)}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-ink transition hover:border-accent-300 hover:bg-accent-50"
-              >
-                <span>{item.label}</span>
-                <Plus className="h-4 w-4 text-accent-600" />
-              </button>
-            ))}
+
+  {availableFields.length === 0 ? (
+
+    <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+      No AI fields detected.
+      <br />
+      Upload an Excel file above.
+    </div>
+
+  ) : (
+
+    availableFields.map((item) => (
+
+      <button
+  key={item.field}
+  type="button"
+  draggable
+
+  onDragStart={() => {
+    setDragPlaceholder({
+      field: item.field,
+      label: item.label
+    });
+  }}
+
+  onDragEnd={() => {
+    setDragPlaceholder(null);
+  }}
+
+  onClick={() => addField(item.field)}
+
+  className="flex w-full cursor-grab items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-ink transition hover:border-accent-300 hover:bg-accent-50 active:cursor-grabbing"
+>
+        <span>{item.label}</span>
+        <Plus className="h-4 w-4 text-accent-600" />
+      </button>
+
+    ))
+
+  )}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Custom field
@@ -709,6 +1176,15 @@ export function CertificateEditor({
               </p>
             </div>
           </div>
+          <Button
+  type="button"
+  variant="secondary"
+  className="mb-5 w-full"
+  onClick={() => autoArrangeFields()}
+>
+  <Wand2 className="mr-2 h-4 w-4" />
+  Auto Arrange Fields
+</Button>
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-700">Zoom</p>
             <div className="mt-3 flex items-center gap-3">

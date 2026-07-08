@@ -19,7 +19,11 @@ import {
   resolveCertificateIssueDate,
   updateCertificateTemplate
 } from '../services/certificate-templates';
-import { readExcelRecipients, buildTemplateContext } from '../services/excel';
+import {
+  readExcelRecipients,
+  buildTemplateContext,
+  extractExcelFields
+} from '../services/excel';
 import {
   listCertificateBackgroundPreviewPages,
   renderCertificateBackgroundPreviewPage,
@@ -381,4 +385,27 @@ router.put(
   })
 );
 
+router.post(
+  '/extract-fields',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  previewUpload.single('excelFile'),
+  asyncHandler(async (req, res) => {
+    const excelFile = req.file;
+
+    if (!excelFile) {
+      throw new AppError('Excel file is required', 400);
+    }
+
+    try {
+      const fields = await extractExcelFields(excelFile.path);
+
+      res.json({
+        fields
+      });
+    } finally {
+      await fs.promises.unlink(excelFile.path).catch(() => undefined);
+    }
+  })
+);
 export default router;

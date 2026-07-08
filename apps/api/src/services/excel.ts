@@ -132,3 +132,80 @@ export function buildTemplateContext(row: RecipientRow) {
     today: date
   };
 }
+export async function extractExcelFields(filePath: string) {
+  const buffer = await fs.readFile(filePath);
+
+  const workbook = XLSX.read(buffer, {
+    type: 'buffer',
+    cellDates: true
+  });
+
+  const sheetName = workbook.SheetNames[0];
+
+  if (!sheetName) {
+    return [];
+  }
+
+  const sheet = workbook.Sheets[sheetName];
+
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+  header: 1
+}) as unknown[][];
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const headers = (rows[0] as unknown[]).map((h) => String(h).trim());
+
+  return headers
+    .filter(Boolean)
+    .map((header) => {
+      const label = String(header).trim();
+
+      const normalized = normalizeKey(label);
+
+      let field = normalized;
+
+      if (
+        normalized.includes('student_name') ||
+        normalized === 'name'
+      ) {
+        field = 'name';
+      } else if (
+        normalized.includes('mail') ||
+        normalized.includes('email')
+      ) {
+        field = 'email';
+      } else if (
+        normalized.includes('roll')
+      ) {
+        field = 'roll_no';
+      } else if (
+        normalized.includes('course')
+      ) {
+        field = 'course';
+      } else if (
+        normalized.includes('department')
+      ) {
+        field = 'department';
+      } else if (
+        normalized.includes('college')
+      ) {
+        field = 'college';
+      } else if (
+        normalized.includes('score')
+      ) {
+        field = 'score';
+      } else if (
+        normalized.includes('date')
+      ) {
+        field = 'date';
+      }
+
+      return {
+        field,
+        label
+      };
+    });
+}
