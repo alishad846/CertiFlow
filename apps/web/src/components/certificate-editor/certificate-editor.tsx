@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createWorker } from 'tesseract.js';
 import { CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,6 +145,8 @@ export function CertificateEditor({
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  const [extractingText, setExtractingText] = useState(false);
+  const [extractMessage, setExtractMessage] = useState('');
   const [dragState, setDragState] = useState<{
     field: string;
     pageNumber: number;
@@ -447,6 +450,102 @@ const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number,
   setActivePage(pageNumber);
   setEditingFieldId(id);
 };
+const extractExistingTextFromTemplate = async () => {
+  const page = pagesToRender.find((item) => item.pageNumber === activePage) ?? pagesToRender[0];
+
+  if (!page) {
+    return;
+  }
+
+  setExtractingText(true);
+  setExtractMessage('Scanning template text...');
+
+  try {
+    const worker = await createWorker('eng');
+    const result = await worker.recognize(page.src, {}, { blocks: true, text: true });
+    await worker.terminate();
+    
+    type OcrItem = {
+  text?: string;
+  confidence?: number;
+  bbox?: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
+  words?: OcrItem[];
+};
+
+type OcrBlock = {
+  lines?: OcrItem[];
+  paragraphs?: Array<{
+    lines?: OcrItem[];
+  }>;
+};
+
+const ocrData = result.data as unknown as {
+  text?: string;
+  lines?: OcrItem[];
+  words?: OcrItem[];
+  blocks?: OcrBlock[];
+};
+
+const blockItems = (ocrData.blocks ?? []).flatMap((block) => [
+  ...(block.lines ?? []),
+  ...(block.lines ?? []).flatMap((line) => line.words ?? []),
+  ...(block.paragraphs ?? []).flatMap((paragraph) => [
+    ...(paragraph.lines ?? []),
+    ...(paragraph.lines ?? []).flatMap((line) => line.words ?? [])
+  ])
+]);
+
+const detectedItems = [
+  ...(ocrData.lines ?? []),
+  ...(ocrData.words ?? []),
+  ...blockItems
+].filter((item) => {
+  const text = item.text?.trim();
+  return text && item.bbox && text.length > 1 && (item.confidence ?? 100) > 20;
+});
+
+if (!detectedItems.length) {
+  setExtractMessage(
+    ocrData.text?.trim()
+      ? `Text found but positions were not detected: ${ocrData.text.trim()}`
+      : 'No text detected. Try a clearer certificate image.'
+  );
+  return;
+}
+
+const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => {
+  const text = item.text?.trim() ?? '';
+  const box = item.bbox!;
+
+  return {
+    ...defaultFieldStyle,
+    id: createEditorFieldId('ocr-text', fields.length + index),
+    field: `ocr_text_${Date.now()}_${index}`,
+    pageNumber: page.pageNumber,
+    text,
+    x: Math.max(0, box.x0),
+    y: Math.max(0, box.y0),
+    width: Math.max(80, box.x1 - box.x0),
+    fontSize: clampFontSize(Math.max(12, box.y1 - box.y0)),
+    align: 'left'
+  };
+});
+    
+     
+    setSelectedField(extractedFields[0]?.id ?? null);
+    setEditingFieldId(extractedFields[0]?.id ?? null);
+    setExtractMessage(`Detected ${extractedFields.length} editable text layers.`);
+  } catch (error) {
+    setExtractMessage(error instanceof Error ? error.message : 'Failed to extract text.');
+  } finally {
+    setExtractingText(false);
+  }
+};
   const changeSelectedFontSize = (delta: number) => {
     if (!selectedField) {
       return;
@@ -727,7 +826,20 @@ onDoubleClick={(event) => {
               <p className="mt-1 text-xs font-medium text-slate-400">Drag, add, edit</p>
             </div>
           </div>
+          <Button
+  type="button"
+  className="mt-4 w-full bg-white text-ink border border-slate-200 hover:bg-slate-50"
+  onClick={extractExistingTextFromTemplate}
+  disabled={extractingText}
+>
+  {extractingText ? 'Extracting text...' : 'Extract existing text'}
+</Button>
 
+{extractMessage ? (
+  <p className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+    {extractMessage}
+  </p>
+) : null}
           {pagesToRender.length > 1 ? (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Placement page</p>
