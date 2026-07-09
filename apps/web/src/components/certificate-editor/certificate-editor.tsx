@@ -425,7 +425,28 @@ export function CertificateEditor({
     setSelectedField(id);
     setFields((current) => [...current, nextField]);
   };
+const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number, y: number) => {
+  const trimmedText = text.trim();
+  const nextText = trimmedText || DEFAULT_FREE_TEXT;
+  const id = createEditorFieldId('text', fields.length);
+  const fieldName = createUniqueFieldName('text', fields);
 
+  const nextField: EditorFieldConfig = {
+    ...defaultFieldStyle,
+    id,
+    field: fieldName,
+    pageNumber,
+    text: nextText,
+    x,
+    y,
+    width: getFreeTextFieldWidth(nextText)
+  };
+
+  setFields((current) => [...current, nextField]);
+  setSelectedField(id);
+  setActivePage(pageNumber);
+  setEditingFieldId(id);
+};
   const changeSelectedFontSize = (delta: number) => {
     if (!selectedField) {
       return;
@@ -517,6 +538,21 @@ export function CertificateEditor({
                   pageRefs.current[page.pageNumber] = element;
                 }}
                 onPointerDown={() => setActivePage(page.pageNumber)}
+onDoubleClick={(event) => {
+  if (event.target !== event.currentTarget) {
+    return;
+  }
+
+  const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
+  if (!rect) {
+    return;
+  }
+
+  const x = (event.clientX - rect.left) / displayZoom;
+  const y = (event.clientY - rect.top) / displayZoom;
+
+  addFreeTextFieldAtPosition('Type here', page.pageNumber, x, y);
+}}
                 className={`relative overflow-hidden rounded-[18px] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
                   isActivePage ? 'border-2 border-accent-500' : 'border border-slate-300'
                 }`}
@@ -526,11 +562,22 @@ export function CertificateEditor({
                 }}
               >
                 <img
-                  src={page.src}
-                  alt={`${template.name} page ${page.pageNumber}`}
-                  className="absolute inset-0 h-full w-full select-none object-fill"
-                  draggable={false}
-                />
+  src={page.src}
+  alt={`${template.name} page ${page.pageNumber}`}
+  className="absolute inset-0 h-full w-full select-none object-fill"
+  draggable={false}
+  onDoubleClick={(event) => {
+    const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
+    const x = (event.clientX - rect.left) / displayZoom;
+    const y = (event.clientY - rect.top) / displayZoom;
+
+    addFreeTextFieldAtPosition('Type here', page.pageNumber, x, y);
+  }}
+/>
 
                 <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">
                   Page {page.pageNumber}
