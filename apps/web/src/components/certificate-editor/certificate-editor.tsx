@@ -131,6 +131,7 @@ export function CertificateEditor({
   const [name, setName] = useState(template.name);
   const [fields, setFields] = useState<EditorFieldConfig[]>([]);
   const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
   const [customFieldName, setCustomFieldName] = useState('');
@@ -549,6 +550,11 @@ export function CertificateEditor({
                         setSelectedField(field.id);
                         setActivePage(field.pageNumber ?? 1);
                       }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedField(field.id);
+                        setEditingFieldId(field.id);
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           setSelectedField(field.id);
@@ -600,13 +606,62 @@ export function CertificateEditor({
                           <X className="h-4 w-4" />
                         </button>
                       ) : null}
-                      <span
-                        className={`pointer-events-none block bg-white/0 ${
-                          isFreeText ? 'whitespace-pre-wrap break-words' : 'whitespace-nowrap'
-                        }`}
-                      >
-                        {displayText}
-                      </span>
+                      {editingFieldId === field.id ? (
+  <textarea
+    autoFocus
+    value={isFreeText ? field.text ?? '' : field.field}
+    onPointerDown={(event) => event.stopPropagation()}
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => {
+      if (isFreeText) {
+        updateField(field.id, {
+          text: event.target.value
+        });
+      } else {
+        updateField(field.id, {
+          field: event.target.value
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '_')
+        });
+      }
+    }}
+    onBlur={() => setEditingFieldId(null)}
+    onKeyDown={(event) => {
+      event.stopPropagation();
+
+      if (event.key === 'Escape') {
+        setEditingFieldId(null);
+      }
+
+      if (
+        event.key === 'Enter' &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        setEditingFieldId(null);
+      }
+    }}
+    className="block h-auto min-h-[1.4em] w-full resize-none overflow-hidden border-none bg-white/90 p-1 outline-none"
+    style={{
+      color: field.color,
+      fontFamily: field.fontFamily,
+      fontSize: 'inherit',
+      lineHeight: 1.1,
+      textAlign: field.align
+    }}
+  />
+) : (
+  <span
+    className={`pointer-events-none block bg-white/0 ${
+      isFreeText
+        ? 'whitespace-pre-wrap break-words'
+        : 'whitespace-nowrap'
+    }`}
+  >
+    {displayText}
+  </span>
+                )}
                     </div>
                   );
                 })}
