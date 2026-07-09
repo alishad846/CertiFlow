@@ -161,10 +161,10 @@ export default function HomePage() {
         <section className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr]">
           <Card className="border-slate-200 bg-white p-7 shadow-sm md:p-10">
             <div className="flex flex-wrap items-center gap-3">
-              <Badge tone="blue" className="gap-2">
+              {/* <Badge tone="blue" className="gap-2">
                 <Sparkles className="h-3.5 w-3.5" />
                 Minimal SaaS workflow
-              </Badge>
+              </Badge> */}
               <Badge tone="slate">For EdTech + HR teams</Badge>
               <Badge tone="green">Credit controlled</Badge>
             </div>
@@ -272,29 +272,39 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {workflow.map((item, index) => {
-                const Icon = item.icon;
-                const isActive = activeStep === index;
+            <div className="mt-5 grid grid-cols-1 gap-2">
+  {workflow.map((item, index) => {
+    const Icon = item.icon;
+    const isActive = activeStep === index;
 
-                return (
-                  <button
-                    key={item.title}
-                    type="button"
-                    onMouseEnter={() => setActiveStep(index)}
-                    onFocus={() => setActiveStep(index)}
-                    className={`rounded-2xl border p-3 text-left transition ${
-                        isActive
-                            ? 'border-sky-300 bg-sky-50 text-sky-900'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="mt-2 block text-xs font-bold">{item.title}</span>
-                  </button>
-                );
-              })}
-            </div>
+    return (
+      <button
+        key={item.title}
+        type="button"
+        onClick={() => setActiveStep(index)}
+        onMouseEnter={() => setActiveStep(index)}
+        onFocus={() => setActiveStep(index)}
+        className={`group flex h-[72px] w-full items-center gap-3 rounded-2xl border px-4 text-left transition-all duration-300 ${
+          isActive
+            ? 'border-slate-200 bg-white text-slate-950 shadow-lg shadow-slate-300/40'
+            : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white hover:text-slate-950'
+        }`}
+      >
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+            isActive ? 'bg-slate-950 text-white' : 'bg-white text-slate-400'
+          }`}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+
+        <span className="block min-w-0 text-sm font-bold leading-5">
+          {item.title}
+        </span>
+      </button>
+    );
+  })}
+</div>
 
             <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-start gap-3">

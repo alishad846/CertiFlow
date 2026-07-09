@@ -1,89 +1,154 @@
 .page {
   position: relative;
-  display: grid;
   min-height: 100vh;
-  place-items: center;
   overflow: hidden;
-  padding: 32px 16px;
-  color: #101828;
-  background:
-    radial-gradient(circle at top left, rgba(42, 141, 240, 0.16), transparent 30%),
-    radial-gradient(circle at top right, rgba(15, 23, 42, 0.08), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, #ffffff 44%, #eef6ff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: #f7fafc;
+  color: #020617;
 }
 
-.orbLeft,
-.orbRight {
+.gridPattern {
   position: absolute;
-  border-radius: 999px;
-  filter: blur(16px);
+  inset: 0;
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
   pointer-events: none;
 }
 
-.orbLeft {
-  top: -160px;
-  left: -120px;
-  width: 360px;
-  height: 360px;
-  background: rgba(85, 175, 255, 0.18);
-}
-
-.orbRight {
-  right: -160px;
-  bottom: -140px;
-  width: 420px;
-  height: 420px;
-  background: rgba(31, 86, 168, 0.12);
-}
-
-.shell {
+.authShell {
   position: relative;
   z-index: 1;
-  width: min(100%, 1000px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 1fr 440px;
+  width: min(1040px, 100%);
+  min-height: 620px;
+  border: 1px solid #dbe4ef;
+  border-radius: 28px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.infoPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 42px;
+  background: #020617;
+  color: #ffffff;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 800;
+}
+
+.logoMark {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #020617;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #93c5fd;
+}
+
+.heroTitle {
+  margin: 0;
+  max-width: 520px;
+  font-size: 46px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.heroText {
+  margin: 22px 0 0;
+  max-width: 520px;
+  color: #cbd5e1;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.statsRow div {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.statsRow strong {
+  display: block;
+  font-size: 24px;
+}
+
+.statsRow span {
+  display: block;
+  margin-top: 4px;
+  color: #cbd5e1;
+  font-size: 13px;
 }
 
 .card {
-  width: 100%;
-  max-width: 460px;
-  margin: 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 32px;
-  background: rgba(255, 255, 255, 0.88);
-  padding: 32px;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(22px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 42px;
+  background: #ffffff;
 }
 
 .brand {
   margin: 0;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.24em;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #1f56a8;
 }
 
 .title {
   margin: 14px 0 0;
-  font-family: var(--font-heading), system-ui, sans-serif;
-  font-size: clamp(2rem, 4vw, 2.85rem);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-size: 34px;
+  line-height: 1.15;
+  letter-spacing: 0;
 }
 
 .description {
-  margin: 10px 0 0;
-  font-size: 0.96rem;
-  line-height: 1.65;
-  color: #667085;
+  margin: 12px 0 0;
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .form {
-  margin-top: 28px;
+  margin-top: 30px;
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .field {
@@ -91,87 +156,210 @@
   gap: 8px;
 }
 
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .label {
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: #344054;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .input {
   width: 100%;
-  border: 1px solid #d0d5dd;
+  height: 54px;
+  border: 1px solid #cbd5e1;
   border-radius: 16px;
-  background: #fff;
-  padding: 14px 16px;
-  font: inherit;
-  color: #101828;
+  padding: 0 16px;
+  background: #f8fafc;
+  color: #020617;
+  font-size: 15px;
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.input::placeholder {
-  color: #98a2b3;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
 .input:focus {
-  border-color: #55afff;
-  box-shadow: 0 0 0 4px rgba(85, 175, 255, 0.16);
-}
-
-.error {
-  margin: 0;
-  border-radius: 16px;
-  background: #fff1f3;
-  padding: 12px 14px;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: #b42318;
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
 .button {
-  margin-top: 4px;
-  width: 100%;
+  height: 56px;
   border: 0;
   border-radius: 16px;
-  background: linear-gradient(135deg, #101828, #1f56a8);
-  padding: 14px 18px;
-  font: inherit;
-  font-weight: 700;
-  color: #fff;
+  background: #020617;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16);
-  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.22);
 }
 
-.button:hover:not(:disabled) {
+.button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 56px rgba(15, 23, 42, 0.22);
-}
-
-.button:focus-visible,
-.link:focus-visible {
-  outline: 3px solid rgba(85, 175, 255, 0.28);
-  outline-offset: 3px;
+  background: #172033;
 }
 
 .button:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.footer {
-  margin: 22px 0 0;
-  font-size: 0.94rem;
-  line-height: 1.6;
-  color: #667085;
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
 }
 
 .link {
-  font-weight: 700;
-  color: #1f56a8;
+  color: #2563eb;
+  font-weight: 800;
   text-decoration: none;
 }
 
 .link:hover {
   text-decoration: underline;
+}
+
+.error {
+  margin: 0;
+  border-radius: 14px;
+  background: #fef2f2;
+  padding: 12px 14px;
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.footer {
+  margin: 24px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .page {
+    padding: 18px;
+  }
+
+  .authShell {
+    grid-template-columns: 1fr;
+  }
+
+ .infoPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 54px 48px 46px;
+  background: #020617;
+  color: #ffffff;
+}
+
+  .heroTitle {
+    font-size: 34px;
+  }
+
+  .card {
+    padding: 28px;
+  }
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.logoMark {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  border-radius: 18px;
+  background: #ffffff;
+  color: #020617;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoIcon {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.logoText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.logoName {
+  font-size: 18px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.logoTagline {
+  margin-top: 6px;
+  font-size: 19px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  max-width: 520px;
+}
+@media (max-width: 640px) {
+  .logo {
+    gap: 12px;
+  }
+
+  .logoMark {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    border-radius: 16px;
+  }
+
+  .logoIcon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .logoName {
+    font-size: 16px;
+  }
+
+  .logoTagline {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+}
+.authShell {
+  width: min(1170px, calc(100% - 32px));
+  min-height: 696px;
+  display: grid;
+  grid-template-columns: 1.25fr 0.95fr;
+  border: 1px solid #d8e0eb;
+  border-radius: 30px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+}
+
+.infoPanel {
+  background: #020617;
+  color: #ffffff;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card {
+  padding: 96px 48px;
+  background: #ffffff;
 }

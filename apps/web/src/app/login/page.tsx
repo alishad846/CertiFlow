@@ -11,17 +11,43 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  return (
-    <main className={styles.page}>
-      <div className={styles.orbLeft} />
-      <div className={styles.orbRight} />
-      <div className={styles.shell}>
-        <section className={styles.card}>
-          <p className={styles.brand}>CertiFlow</p>
-          <h1 className={styles.title}>Welcome back</h1>
-          <p className={styles.description}>Sign in to manage batches, credits, and delivery logs.</p>
+ return (
+  <main className={styles.page}>
+    <div className={styles.gridPattern} />
 
-          <form
+    <section className={styles.authShell}>
+      <div className={styles.infoPanel}>
+        <Link href="/" className={styles.logo}>
+          <span className={styles.logoMark}>C</span>
+          <span>CertiFlow</span>
+        </Link>
+
+        <div>
+          <p className={styles.eyebrow}>Certificate operations</p>
+          <h1 className={styles.heroTitle}>Manage bulk certificates without the manual mess.</h1>
+          <p className={styles.heroText}>
+            Sign in to upload batches, track delivery, manage credits, and keep certificate workflows moving.
+          </p>
+        </div>
+
+        <div className={styles.statsRow}>
+          <div>
+            <strong>50k+</strong>
+            <span>Certificates</span>
+          </div>
+          <div>
+            <strong>99%</strong>
+            <span>Delivery clarity</span>
+          </div>
+        </div>
+      </div>
+
+      <section className={styles.card}>
+        <p className={styles.brand}>Welcome back</p>
+        <h2 className={styles.title}>Sign in to your account</h2>
+        <p className={styles.description}>Use your CertiFlow credentials to continue.</p>
+
+        <form
           className={styles.form}
           onSubmit={async (event) => {
             event.preventDefault();
@@ -43,7 +69,7 @@ export default function LoginPage() {
         >
           <div className={styles.field}>
             <label className={styles.label} htmlFor="login-email">
-              Email
+              Email address
             </label>
             <input
               id="login-email"
@@ -54,22 +80,24 @@ export default function LoginPage() {
               placeholder="you@company.com"
             />
           </div>
+
           <div className={styles.field}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className={styles.labelRow}>
               <label className={styles.label} htmlFor="login-password">
                 Password
               </label>
-              <Link href="/forgot-password" className={styles.link} style={{ fontSize: '0.85rem' }}>
-                Forgot password?
+              <Link href="/forgot-password" className={styles.link}>
+                Forgot?
               </Link>
             </div>
+
             <input
               id="login-password"
               type="password"
               className={styles.input}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Your password"
+              placeholder="Enter your password"
             />
           </div>
 
@@ -78,16 +106,16 @@ export default function LoginPage() {
           <button className={styles.button} type="submit" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
-          </form>
+        </form>
 
         <p className={styles.footer}>
-          New here?{' '}
+          New to CertiFlow?{' '}
           <Link href="/register" className={styles.link}>
-            Create an account
+            Create account
           </Link>
         </p>
-        </section>
-      </div>
-    </main>
-  );
+      </section>
+    </section>
+  </main>
+);
 }
