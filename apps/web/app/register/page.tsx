@@ -87,13 +87,43 @@ export default function RegisterPage() {
           onSubmit={async (event) => {
             event.preventDefault();
             setError('');
+
+            const nameValue = form.name.trim();
+            const emailValue = form.email.trim();
+            const passwordValue = form.password.trim();
+            const companyNameValue = form.companyName.trim();
+
+            const missingFields = [];
+
+            if (!nameValue) missingFields.push('Full name');
+            if (!emailValue) missingFields.push('Email address');
+            if (!passwordValue) missingFields.push('Password');
+            if (!companyNameValue) missingFields.push('Company name');
+
+            if (missingFields.length >= 2) {
+              setError('All fields are required');
+              return;
+            }
+
+            if (missingFields.length === 1) {
+              setError(`${missingFields[0]} is required`);
+              return;
+            }
+
             setLoading(true);
+
             try {
               await apiFetch('/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                body: JSON.stringify({
+                  name: nameValue,
+                  email: emailValue,
+                  password: passwordValue,
+                  companyName: companyNameValue
+                })
               });
+
               window.location.assign('/dashboard');
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Registration failed');

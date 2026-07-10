@@ -76,13 +76,34 @@ export default function LoginPage() {
           onSubmit={async (event) => {
             event.preventDefault();
             setError('');
+
+            const emailValue = email.trim();
+            const passwordValue = password.trim();
+
+            if (!emailValue && !passwordValue) {
+              setError('Both fields are required');
+              return;
+            }
+
+            if (!emailValue) {
+              setError('Enter your email');
+              return;
+            }
+
+            if (!passwordValue) {
+              setError('Enter your password');
+              return;
+            }
+
             setLoading(true);
+
             try {
               await apiFetch('/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ email: emailValue, password })
               });
+
               window.location.assign('/dashboard');
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Login failed');
