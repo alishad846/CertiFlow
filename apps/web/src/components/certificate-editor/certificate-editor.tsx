@@ -37,6 +37,7 @@ const defaultFieldStyle: CertificateFieldConfig = {
 
 type EditorFieldConfig = CertificateFieldConfig & {
   id: string;
+  isOcrText?: boolean;
 };
 
 type PreviewPage = {
@@ -506,7 +507,10 @@ const detectedItems = [
   ...blockItems
 ].filter((item) => {
   const text = item.text?.trim();
-  return text && item.bbox && text.length > 1 && (item.confidence ?? 100) > 20;
+
+  if (!text || text.length < 3) return false;
+
+  return item.bbox && (item.confidence ?? 100) > 50;
 });
 
 if (!detectedItems.length) {
@@ -526,6 +530,7 @@ const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => 
     ...defaultFieldStyle,
     id: createEditorFieldId('ocr-text', fields.length + index),
     field: `ocr_text_${Date.now()}_${index}`,
+    isOcrText: true,
     pageNumber: page.pageNumber,
     text,
     x: Math.max(0, box.x0),
@@ -535,7 +540,10 @@ const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => 
     align: 'left'
   };
 });
-    
+   setFields((current) => [
+  ...current.filter((field) => !field.isOcrText),
+  ...extractedFields
+]); 
      
     setSelectedField(extractedFields[0]?.id ?? null);
     setEditingFieldId(extractedFields[0]?.id ?? null);
@@ -729,15 +737,17 @@ onDoubleClick={(event) => {
                           : 'hover:ring-1 hover:ring-accent-200'
                       }`}
                       style={{
-                        left: field.x * displayZoom,
-                        top: field.y * displayZoom,
-                        width: field.width * displayZoom,
-                        fontSize: field.fontSize * displayZoom,
-                        color: field.color,
-                        fontFamily: field.fontFamily,
-                        textAlign: field.align,
-                        lineHeight: 1.1
-                      }}
+  left: field.x * displayZoom,
+  top: field.y * displayZoom,
+  width: field.width * displayZoom,
+  fontSize: field.fontSize * displayZoom,
+  color: field.color,
+  fontFamily: field.fontFamily,
+  textAlign: field.align,
+  lineHeight: 1.1,
+  backgroundColor: field.isOcrText ? '#ffffff' : 'transparent',
+  padding: field.isOcrText ? `${2 * displayZoom}px` : undefined
+}}
                     >
                       {isSelected ? (
                         <button
