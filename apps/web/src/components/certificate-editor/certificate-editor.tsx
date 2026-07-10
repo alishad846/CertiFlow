@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
 import { CheckCircle2, Plus, Trash2, ZoomIn, ZoomOut, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -463,7 +463,28 @@ const extractExistingTextFromTemplate = async () => {
 
   try {
     const worker = await createWorker('eng');
-    const result = await worker.recognize(page.src, {}, { blocks: true, text: true });
+    await worker.setParameters({
+  tessedit_pageseg_mode: PSM.SINGLE_BLOCK
+});
+
+const result = await worker.recognize(
+  page.src,
+  {},
+  {
+    blocks: true,
+    text: true
+  }
+);
+    const sourceImage = new Image();
+
+await new Promise<void>((resolve, reject) => {
+  sourceImage.onload = () => resolve();
+  sourceImage.onerror = () => reject(new Error('Could not load certificate image for OCR scaling.'));
+  sourceImage.src = page.src;
+});
+
+const scaleX = page.width / sourceImage.naturalWidth;
+const scaleY = page.height / sourceImage.naturalHeight;
     await worker.terminate();
     
     type OcrItem = {
@@ -492,25 +513,50 @@ const ocrData = result.data as unknown as {
   blocks?: OcrBlock[];
 };
 
-const blockItems = (ocrData.blocks ?? []).flatMap((block) => [
+const lineItems = (ocrData.blocks ?? []).flatMap((block) => [
   ...(block.lines ?? []),
-  ...(block.lines ?? []).flatMap((line) => line.words ?? []),
-  ...(block.paragraphs ?? []).flatMap((paragraph) => [
-    ...(paragraph.lines ?? []),
-    ...(paragraph.lines ?? []).flatMap((line) => line.words ?? [])
-  ])
+  ...(block.paragraphs ?? []).flatMap(
+    (paragraph) => paragraph.lines ?? []
+  )
 ]);
 
-const detectedItems = [
+const candidateItems = [
   ...(ocrData.lines ?? []),
-  ...(ocrData.words ?? []),
-  ...blockItems
-].filter((item) => {
-  const text = item.text?.trim();
+  ...lineItems
+];
 
-  if (!text || text.length < 3) return false;
+const detectedItems = (
+  candidateItems.length
+    ? candidateItems
+    : (ocrData.words ?? [])
+).filter((item) => {
+const text = item.text?.trim();
 
-  return item.bbox && (item.confidence ?? 100) > 50;
+if (!text || text.length < 3) {
+  return false;
+}
+
+const upper = text.toUpperCase();
+
+const ignoredWords = [
+  "JOHNS HOPKINS",
+  "JOHNS HOPKINS UNIVERSITY",
+  "COURSE CERTIFICATE",
+  "COURSERA"
+];
+
+if (
+  ignoredWords.some((word) => upper.includes(word)) ||
+  upper.includes("UNIVERSITY")
+) {
+  return false;
+}
+
+
+return Boolean(
+  item.bbox &&
+  (item.confidence ?? 100) > 50
+);
 });
 
 if (!detectedItems.length) {
@@ -533,10 +579,10 @@ const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => 
     isOcrText: true,
     pageNumber: page.pageNumber,
     text,
-    x: Math.max(0, box.x0),
-    y: Math.max(0, box.y0),
-    width: Math.max(80, box.x1 - box.x0),
-    fontSize: clampFontSize(Math.max(12, box.y1 - box.y0)),
+    x: Math.max(0, box.x0 * scaleX),
+    y: Math.max(0, box.y0 * scaleY),
+    width: Math.max(80, (box.x1 - box.x0) * scaleX),
+    fontSize: clampFontSize(Math.max(12, (box.y1 - box.y0) * scaleY)),
     align: 'left'
   };
 });
