@@ -269,9 +269,37 @@ export function CertificateEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!selectedField || !event.ctrlKey) {
-        return;
-      }
+      if (!selectedField) {
+  return;
+}
+
+if (!event.ctrlKey) {
+  return;
+}
+        if (
+  selectedField &&
+  (event.key === 'Delete' || event.key === 'Backspace')
+) {
+  const target = event.target as HTMLElement;
+
+  if (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.isContentEditable
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+
+  setFields((current) =>
+    current.filter((field) => field.id !== selectedField)
+  );
+
+  setSelectedField(null);
+  setEditingFieldId(null);
+  return;
+}
 
       if (event.key === '=' || event.key === '+') {
         event.preventDefault();
