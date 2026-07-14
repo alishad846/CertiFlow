@@ -448,8 +448,8 @@ const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number,
 
   setFields((current) => [...current, nextField]);
   setSelectedField(id);
-  setActivePage(pageNumber);
   setEditingFieldId(id);
+  setActivePage(pageNumber);
 };
 const extractExistingTextFromTemplate = async () => {
   const page = pagesToRender.find((item) => item.pageNumber === activePage) ?? pagesToRender[0];
@@ -821,11 +821,8 @@ onDoubleClick={(event) => {
         });
       } else {
         updateField(field.id, {
-          field: event.target.value
-            .trim()
-            .toLowerCase()
-            .replace(/\s+/g, '_')
-        });
+  field: event.target.value
+});
       }
     }}
     onBlur={() => setEditingFieldId(null)}
