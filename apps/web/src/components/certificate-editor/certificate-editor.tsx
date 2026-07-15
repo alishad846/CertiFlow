@@ -137,7 +137,7 @@ export function CertificateEditor({
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
   const [customFieldName, setCustomFieldName] = useState('');
-  const [customTextValue, setCustomTextValue] = useState(DEFAULT_FREE_TEXT);
+  const [customTextValue, setCustomTextValue] = useState('');
   const [previewPages, setPreviewPages] = useState<PreviewPage[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [activePage, setActivePage] = useState(1);
@@ -154,6 +154,14 @@ export function CertificateEditor({
     offsetX: number;
     offsetY: number;
   } | null>(null);
+  const [resizeState, setResizeState] = useState<{
+  fieldId: string;
+  pageNumber: number;
+  direction: 'left' | 'right';
+  startPointerX: number;
+  startX: number;
+  startWidth: number;
+} | null>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
@@ -230,6 +238,65 @@ export function CertificateEditor({
     if (!dragState) {
       return;
     }
+    useEffect(() => {
+  if (!resizeState) {
+    return;
+  }
+
+  const handleResizeMove = (event: PointerEvent) => {
+    const container = pageRefs.current[resizeState.pageNumber];
+
+    if (!container) {
+      return;
+    }
+
+    const pointerX =
+      (event.clientX - container.getBoundingClientRect().left) / displayZoom;
+
+    const deltaX = pointerX - resizeState.startPointerX;
+
+    setFields((current) =>
+      current.map((field) => {
+        if (field.id !== resizeState.fieldId) {
+          return field;
+        }
+
+        if (resizeState.direction === 'right') {
+          return {
+            ...field,
+            width: Math.max(60, resizeState.startWidth + deltaX)
+          };
+        }
+
+        const nextWidth = Math.max(
+          60,
+          resizeState.startWidth - deltaX
+        );
+
+        const appliedDelta =
+          resizeState.startWidth - nextWidth;
+
+        return {
+          ...field,
+          x: resizeState.startX + appliedDelta,
+          width: nextWidth
+        };
+      })
+    );
+  };
+
+  const handleResizeUp = () => {
+    setResizeState(null);
+  };
+
+  window.addEventListener('pointermove', handleResizeMove);
+  window.addEventListener('pointerup', handleResizeUp);
+
+  return () => {
+    window.removeEventListener('pointermove', handleResizeMove);
+    window.removeEventListener('pointerup', handleResizeUp);
+  };
+}, [resizeState, displayZoom]);
 
     const handleMove = (event: PointerEvent) => {
       const container = pageRefs.current[dragState.pageNumber];
@@ -438,8 +505,13 @@ if (!event.ctrlKey) {
   };
 
   const addFreeTextField = (text: string) => {
-    const trimmedText = text.trim();
-    const nextText = trimmedText || DEFAULT_FREE_TEXT;
+  const trimmedText = text.trim();
+
+  if (!trimmedText) {
+    return;
+  }
+
+  const nextText = trimmedText;
     const id = createEditorFieldId('text', fields.length);
 
     const fieldName = createUniqueFieldName('text', fields);
@@ -458,8 +530,7 @@ if (!event.ctrlKey) {
     setFields((current) => [...current, nextField]);
   };
 const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number, y: number) => {
-  const trimmedText = text.trim();
-  const nextText = trimmedText || DEFAULT_FREE_TEXT;
+  const nextText = text.trim();
   const id = createEditorFieldId('text', fields.length);
   const fieldName = createUniqueFieldName('text', fields);
 
@@ -732,7 +803,7 @@ onDoubleClick={(event) => {
   const x = (event.clientX - rect.left) / displayZoom;
   const y = (event.clientY - rect.top) / displayZoom;
 
-  addFreeTextFieldAtPosition('Type here', page.pageNumber, x, y);
+  addFreeTextFieldAtPosition('', page.pageNumber, x, y);
 }}
                 className={`relative overflow-hidden rounded-[18px] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
                   isActivePage ? 'border-2 border-accent-500' : 'border border-slate-300'
@@ -756,7 +827,7 @@ onDoubleClick={(event) => {
     const x = (event.clientX - rect.left) / displayZoom;
     const y = (event.clientY - rect.top) / displayZoom;
 
-    addFreeTextFieldAtPosition('Type here', page.pageNumber, x, y);
+    addFreeTextFieldAtPosition('', page.pageNumber, x, y);
   }}
 />
 
@@ -836,6 +907,76 @@ onDoubleClick={(event) => {
                           <X className="h-4 w-4" />
                         </button>
                       ) : null}
+                      {isSelected ? (
+  <>
+    <button
+      type="button"
+      aria-label="Resize from left"
+      className="absolute -left-2 top-1/2 z-20 h-8 w-3 -translate-y-1/2 cursor-ew-resize rounded-full border border-accent-500 bg-white shadow"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const container = pageRefs.current[page.pageNumber];
+
+        if (!container) {
+          return;
+        }
+
+        const pointerX =
+          (event.clientX - container.getBoundingClientRect().left) /
+          displayZoom;
+
+        setDragState(null);
+
+        setResizeState({
+          fieldId: field.id,
+          pageNumber: page.pageNumber,
+          direction: 'left',
+          startPointerX: pointerX,
+          startX: field.x,
+          startWidth: field.width
+        });
+      }}
+    />
+
+    <button
+      type="button"
+      aria-label="Resize from right"
+      className="absolute -right-2 top-1/2 z-20 h-8 w-3 -translate-y-1/2 cursor-ew-resize rounded-full border border-accent-500 bg-white shadow"
+      onPointerDown={(event) => {
+  if (resizeState) {
+    return;
+  }
+
+  event.preventDefault();
+        event.preventDefault();
+        event.stopPropagation();
+
+        const container = pageRefs.current[page.pageNumber];
+
+        if (!container) {
+          return;
+        }
+
+        const pointerX =
+          (event.clientX - container.getBoundingClientRect().left) /
+          displayZoom;
+
+        setDragState(null);
+
+        setResizeState({
+          fieldId: field.id,
+          pageNumber: page.pageNumber,
+          direction: 'right',
+          startPointerX: pointerX,
+          startX: field.x,
+          startWidth: field.width
+        });
+      }}
+    />
+  </>
+) : null}
                       {editingFieldId === field.id ? (
   <textarea
     autoFocus
@@ -909,7 +1050,7 @@ onDoubleClick={(event) => {
           </div>
           <Button
   type="button"
-  className="mt-4 w-full bg-white text-ink border border-slate-200 hover:bg-slate-50"
+  className="mt-4 w-full border border-slate-900 bg-slate-900 text-white hover:bg-slate-800 disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-600"
   onClick={extractExistingTextFromTemplate}
   disabled={extractingText}
 >
@@ -992,9 +1133,9 @@ onDoubleClick={(event) => {
                 type="button"
                 className="mt-3 w-full"
                 onClick={() => {
-                  addFreeTextField(customTextValue);
-                  setCustomTextValue(DEFAULT_FREE_TEXT);
-                }}
+  addFreeTextField(customTextValue);
+  setCustomTextValue('');
+}}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add text field
@@ -1158,9 +1299,21 @@ onDoubleClick={(event) => {
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
               >
                 <option value="Poppins">Poppins</option>
-                <option value="Arial">Arial</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="Courier New">Courier New</option>
+<option value="Arial">Arial</option>
+<option value="Times New Roman">Times New Roman</option>
+<option value="Georgia">Georgia</option>
+<option value="Garamond">Garamond</option>
+<option value="Verdana">Verdana</option>
+<option value="Tahoma">Tahoma</option>
+<option value="Trebuchet MS">Trebuchet MS</option>
+<option value="Courier New">Courier New</option>
+<option value="Calibri">Calibri</option>
+<option value="Cambria">Cambria</option>
+<option value="Palatino Linotype">Palatino Linotype</option>
+<option value="Book Antiqua">Book Antiqua</option>
+<option value="Lucida Sans">Lucida Sans</option>
+<option value="Brush Script MT">Brush Script MT</option>
+<option value="Monotype Corsiva">Monotype Corsiva</option>
               </select>
             </div>
             <div>
