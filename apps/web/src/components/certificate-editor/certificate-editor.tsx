@@ -143,6 +143,7 @@ export function CertificateEditor({
   const [activePage, setActivePage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
+  const displayZoom = zoom * fitZoom;
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
@@ -238,7 +239,44 @@ export function CertificateEditor({
     if (!dragState) {
       return;
     }
-    useEffect(() => {
+
+    const handleMove = (event: PointerEvent) => {
+      const container = pageRefs.current[dragState.pageNumber];
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const pointerX = (event.clientX - rect.left) / displayZoom;
+      const pointerY = (event.clientY - rect.top) / displayZoom;
+      const nextX = Math.max(0, pointerX - dragState.offsetX);
+      const nextY = Math.max(0, pointerY - dragState.offsetY);
+      setFields((current) =>
+        current.map((field) =>
+          field.id === dragState.field
+            ? {
+                ...field,
+                x: nextX,
+                y: nextY
+              }
+            : field
+        )
+      );
+    };
+
+    const handleUp = () => {
+      setDragState(null);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [dragState, zoom]);
+
+  useEffect(() => {
   if (!resizeState) {
     return;
   }
@@ -250,9 +288,8 @@ export function CertificateEditor({
       return;
     }
 
-    const pointerX =
-      (event.clientX - container.getBoundingClientRect().left) / displayZoom;
-
+    const rect = container.getBoundingClientRect();
+    const pointerX = (event.clientX - rect.left) / displayZoom;
     const deltaX = pointerX - resizeState.startPointerX;
 
     setFields((current) =>
@@ -297,42 +334,6 @@ export function CertificateEditor({
     window.removeEventListener('pointerup', handleResizeUp);
   };
 }, [resizeState, displayZoom]);
-
-    const handleMove = (event: PointerEvent) => {
-      const container = pageRefs.current[dragState.pageNumber];
-      if (!container) {
-        return;
-      }
-      const rect = container.getBoundingClientRect();
-      const pointerX = (event.clientX - rect.left) / displayZoom;
-      const pointerY = (event.clientY - rect.top) / displayZoom;
-      const nextX = Math.max(0, pointerX - dragState.offsetX);
-      const nextY = Math.max(0, pointerY - dragState.offsetY);
-      setFields((current) =>
-        current.map((field) =>
-          field.id === dragState.field
-            ? {
-                ...field,
-                x: nextX,
-                y: nextY
-              }
-            : field
-        )
-      );
-    };
-
-    const handleUp = () => {
-      setDragState(null);
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    };
-  }, [dragState, zoom]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -394,7 +395,6 @@ if (!event.ctrlKey) {
   }, [selectedField]);
 
   const selected = useMemo(() => fields.find((field) => field.id === selectedField) ?? null, [fields, selectedField]);
-  const displayZoom = zoom * fitZoom;
   const previewSrc = getTemplatePreviewSrc(template);
   const isPdfTemplate = template.backgroundUrl.toLowerCase().endsWith('.pdf');
   const pagesToRender: PreviewPage[] = isPdfTemplate
