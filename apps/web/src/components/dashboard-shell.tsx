@@ -238,27 +238,35 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-6">
-          <div className="rounded-[30px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur">
-            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Welcome back</p>
-                <h2 className="mt-2 text-4xl font-bold tracking-tight text-ink md:text-5xl">
-                  Generate and send documents in one clean flow.
-                </h2>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                  The dashboard keeps generation, PDF conversion, and delivery status in one simple place for beginners.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge tone="blue">Credits-powered delivery</Badge>
-                <Badge tone="green">Batch size 50</Badge>
-              </div>
-            </div>
-          </div>
+       <main className="min-w-0 flex-1 space-y-6">
+  {currentPath === '/dashboard' && (
+    <div className="rounded-[30px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Welcome back
+          </p>
 
-          {children}
-        </main>
+          <h2 className="mt-2 text-4xl font-bold tracking-tight text-ink md:text-5xl">
+            Generate and send documents in one clean flow.
+          </h2>
+
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+            The dashboard keeps generation, PDF conversion, and delivery
+            status in one simple place for beginners.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="blue">Credits-powered delivery</Badge>
+          <Badge tone="green">Batch size 50</Badge>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {children}
+</main>
       </div>
     </div>
   );
