@@ -17,6 +17,11 @@ export type CertificateFieldConfig = {
   fontSize: number;
   fontFamily: string;
   color: string;
+  height?: number;
+fontWeight?: "normal" | "bold";
+fontStyle?: "normal" | "italic";
+textDecoration?: "none" | "underline";
+rotation?: number;
   align: 'left' | 'center' | 'right';
   text?: string;
 };

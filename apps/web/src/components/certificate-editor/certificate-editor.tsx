@@ -50,6 +50,7 @@ const defaultFieldStyle: CertificateFieldConfig = {
 
 type EditorFieldConfig = CertificateFieldConfig & {
   id: string;
+  height?: number;
 };
 
 type PreviewPage = {
@@ -172,6 +173,8 @@ const [showGuides, setShowGuides] =
 const [snapEnabled, setSnapEnabled] =
   useState(true);
   const [selectedField, setSelectedField] = useState<string | null>(null);
+  const copiedField = useRef<EditorFieldConfig | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [issueDateMode, setIssueDateMode] = useState<CertificateIssueDateMode>(template.issueDateMode ?? 'current_date');
   const [issueDateValue, setIssueDateValue] = useState<string>(template.issueDateValue ?? new Date().toISOString().slice(0, 10));
   const [customFieldName, setCustomFieldName] = useState('');
@@ -190,15 +193,227 @@ const [snapEnabled, setSnapEnabled] =
     offsetX: number;
     offsetY: number;
   } | null>(null);
+ 
+const [resizeState, setResizeState] = useState<{
+  field: string;
+  handle: string;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startLeft: number;
+  startTop: number;
+  startHeight: number;
+  startFontSize: number;
+} | null>(null);
+
+const [rotateState, setRotateState] = useState<{
+  field: string;
+  startAngle: number;
+} | null>(null);
+ 
+  useEffect(() => {
+
+  if (!resizeState) return;
+
+  const handleMove = (event: PointerEvent) => {
+
+    const dx = event.clientX - resizeState.startX;
+    const dy = event.clientY - resizeState.startY;
+
+    setFields((current) =>
+      current.map((field) =>
+        field.id === resizeState.field
+          ? {
+    ...field,
+
+    x:
+      ["left", "top-left", "bottom-left"].includes(resizeState.handle)
+        ? resizeState.startLeft + dx / (zoom * fitZoom)
+        : field.x,
+
+    y:
+      ["top", "top-left", "top-right"].includes(resizeState.handle)
+        ? resizeState.startTop + dy / (zoom * fitZoom)
+        : field.y,
+
+    width:
+      ["left", "top-left", "bottom-left"].includes(resizeState.handle)
+        ? Math.max(
+            40,
+            resizeState.startWidth - dx / (zoom * fitZoom)
+          )
+        : ["right", "top-right", "bottom-right"].includes(resizeState.handle)
+        ? Math.max(
+            40,
+            resizeState.startWidth + dx / (zoom * fitZoom)
+          )
+        : field.width,
+
+    height:
+      ["top", "top-left", "top-right"].includes(resizeState.handle)
+        ? Math.max(
+            40,
+            resizeState.startHeight - dy / (zoom * fitZoom)
+          )
+        : ["bottom", "bottom-left", "bottom-right"].includes(resizeState.handle)
+        ? Math.max(
+            40,
+            resizeState.startHeight + dy / (zoom * fitZoom)
+          )
+        : field.height ?? 50,
+
+    fontSize:
+      ["top-left", "top-right", "bottom-left", "bottom-right"].includes(
+        resizeState.handle
+      )
+        ? Math.max(
+            8,
+            Math.min(
+              220,
+              resizeState.startFontSize +
+                (resizeState.handle.includes("left")
+                  ? -dx
+                  : dx) /
+                  (zoom * fitZoom * 5)
+            )
+          )
+        : field.fontSize
+  }
+: field
+
+      )
+    );
+
+  };
+
+  const handleUp = () => {
+    setResizeState(null);
+  };
+
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp);
+
+  return () => {
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+  };
+
+}, [resizeState, zoom, fitZoom]);
+
+useEffect(() => {
+
+  if (!dragState) return;
+
+  const handleMove = (event: PointerEvent) => {
+
+    const container = pageRefs.current[dragState.pageNumber];
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+
+    const pointerX =
+  (event.clientX - rect.left) / (zoom * fitZoom);
+
+const pointerY =
+  (event.clientY - rect.top) / (zoom * fitZoom);
+
+let nextX = pointerX - dragState.offsetX;
+let nextY = pointerY - dragState.offsetY;
+
+if (event.shiftKey) {
+  const field = fields.find(f => f.id === dragState.field);
+
+  if (field) {
+    const dx = Math.abs(nextX - field.x);
+    const dy = Math.abs(nextY - field.y);
+
+    if (dx > dy) {
+      nextY = field.y;
+    } else {
+      nextX = field.x;
+    }
+  }
+}
+
+    setFields((current) =>
+      current.map((field) =>
+        field.id === dragState.field
+          ? {
+              ...field,
+              x: nextX,
+              y: nextY
+            }
+          : field
+      )
+    );
+
+  };
+
+  const handleUp = () => {
+    setDragState(null);
+  };
+
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp);
+
+  return () => {
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+  };
+
+}, [dragState, zoom, fitZoom]);
+
+useEffect(() => {
+  if (!rotateState) return;
+
+  const handleMove = (event: PointerEvent) => {
+    const field = fields.find((f) => f.id === rotateState.field);
+    if (!field) return;
+
+    const page = pageRefs.current[field.pageNumber ?? 1];
+    if (!page) return;
+
+    const rect = page.getBoundingClientRect();
+
+    const zoomScale = zoom * fitZoom;
+
+const centerX =
+  rect.left + (field.x + field.width / 2) * zoomScale;
+
+const centerY =
+  rect.top + ((field.y + (field.height ?? 50) / 2) * zoomScale);
+
+    const angle =
+      Math.atan2(event.clientY - centerY, event.clientX - centerX) *
+      (180 / Math.PI);
+
+    let rotation = angle + 90;
+
+if (!event.shiftKey) {
+  rotation = Math.round(rotation / 15) * 15;
+}
+
+updateField(field.id, {
+  rotation,
+});
+  };
+
+  const handleUp = () => setRotateState(null);
+
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp);
+
+  return () => {
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+  };
+}, [rotateState, fields, zoom, fitZoom]);
+
   const [dragPlaceholder, setDragPlaceholder] = useState<{
   field: string;
   label: string;
 } | null>(null);
-const [resizeState, setResizeState] = useState<{
-  field: string;
-  startX: number;
-  startWidth: number;
-} | null>(null);
+
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
@@ -271,123 +486,7 @@ const [resizeState, setResizeState] = useState<{
     return () => window.clearTimeout(timer);
   }, [saveState]);
 
-  useEffect(() => {
-    if (!dragState) {
-      return;
-    }
-
-    const handleMove = (event: PointerEvent) => {
-      if (resizeState) {
-
-  const delta =
-    (event.clientX - resizeState.startX) / displayZoom;
-
-  setFields((current) =>
-    current.map((field) =>
-      field.id === resizeState.field
-        ? {
-            ...field,
-            width: Math.max(
-              40,
-              resizeState.startWidth + delta
-            )
-          }
-        : field
-    )
-  );
-
-  return;
-}
-      const container = pageRefs.current[dragState.pageNumber];
-      if (!container) {
-        return;
-      }
-      const rect = container.getBoundingClientRect();
-      const pointerX = (event.clientX - rect.left) / displayZoom;
-      const pointerY = (event.clientY - rect.top) / displayZoom;
-      let nextX = Math.max(0, pointerX - dragState.offsetX);
-let nextY = Math.max(0, pointerY - dragState.offsetY);
-const currentField = fields.find(
-  (f) => f.id === dragState.field
-);
-
-const otherFields = fields.filter(
-  (f) => f.id !== dragState.field
-);
-
-if (snapEnabled) {
-
-  const centerX = stageWidth / 2;
-
-  const centerY = stageHeight / 2;
-
-  let vertical = null;
-
-  let horizontal = null;
-
-  if (Math.abs(nextX - centerX) < SNAP_DISTANCE) {
-    nextX = centerX;
-    vertical = centerX;
-  }
-
-  if (Math.abs(nextY - centerY) < SNAP_DISTANCE) {
-    nextY = centerY;
-    horizontal = centerY;
-  }
-
-  otherFields.forEach((field) => {
-
-  if (Math.abs(nextX - field.x) < SNAP_DISTANCE) {
-    nextX = field.x;
-    vertical = field.x;
-  }
-
-  if (Math.abs(nextY - field.y) < SNAP_DISTANCE) {
-    nextY = field.y;
-    horizontal = field.y;
-  }
-
-});
-  setGuideLines({
-    vertical,
-    horizontal
-  });
-
-} else {
-
-  setGuideLines({
-    vertical: null,
-    horizontal: null
-  });
   
-
-}
-      setFields((current) =>
-        current.map((field) =>
-          field.id === dragState.field
-            ? {
-                ...field,
-                x: nextX,
-                y: nextY
-              }
-            : field
-        )
-      );
-    };
-
-    const handleUp = () => {
-  setDragState(null);
-  setResizeState(null);
-};
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    };
-  }, [dragState, zoom]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -397,6 +496,37 @@ if (snapEnabled) {
   if (selectedField) {
     removeSelected();
   }
+
+  return;
+}
+
+if (event.ctrlKey && event.key.toLowerCase() === "c") {
+  event.preventDefault();
+
+  copiedField.current =
+    fields.find((f) => f.id === selectedField) ?? null;
+
+  return;
+}
+
+if (event.ctrlKey && event.key.toLowerCase() === "v") {
+  event.preventDefault();
+
+  if (!copiedField.current) return;
+
+  const copy: EditorFieldConfig = {
+    ...copiedField.current,
+    id: createEditorFieldId(
+      copiedField.current.field,
+      fields.length
+    ),
+    x: copiedField.current.x + 20,
+    y: copiedField.current.y + 20
+  };
+
+  setHistory((prev) => [...prev, fields]);
+  setFields((prev) => [...prev, copy]);
+  setSelectedField(copy.id);
 
   return;
 }
@@ -425,6 +555,16 @@ if (
   ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
 ) {
   if (!selectedField) return;
+  const selectedPlaceholder = fields.find(
+  (f) => f.id === selectedField
+);
+
+console.log("Locked:", selectedPlaceholder?.locked);
+
+if (selectedPlaceholder?.locked) {
+  event.preventDefault();
+  return;
+}
 
   event.preventDefault();
 
@@ -498,7 +638,7 @@ if (event.ctrlKey && event.key.toLowerCase() === "z") {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedField]);
+  }, [selectedField, fields, history]);
 
   const selected = useMemo(() => fields.find((field) => field.id === selectedField) ?? null, [fields, selectedField]);
   const displayZoom = zoom * fitZoom;
@@ -637,14 +777,16 @@ const detectExcelFields = async () => {
     }
     const id = createEditorFieldId(normalizedField, fields.length);
     const nextField: EditorFieldConfig = {
-      ...defaultFieldStyle,
-      id,
-      field: normalizedField,
-      pageNumber: activePage,
-      x: Math.max(80, stageWidth / 2 - 160),
-      y: Math.max(80, stageHeight / 2 - 40),
-      width: getPlaceholderFieldWidth(normalizedField)
-    };
+  ...defaultFieldStyle,
+  id,
+  field: normalizedField,
+  pageNumber: activePage,
+  x: Math.max(80, stageWidth / 2 - 160),
+  y: Math.max(80, stageHeight / 2 - 40),
+  width: getPlaceholderFieldWidth(normalizedField),
+  height: 50,
+  locked: false,
+};
 
     setSelectedField(id);
     setHistory((prev) => [...prev, fields]);
@@ -667,7 +809,9 @@ setFields((current) => [...current, nextField]);
       text: nextText,
       x: Math.max(80, stageWidth / 2 - 160),
       y: Math.max(80, stageHeight / 2 - 40),
-      width: getFreeTextFieldWidth(nextText)
+      width: getFreeTextFieldWidth(nextText),
+      height: 50,
+      locked: false,
     };
 
     setSelectedField(id);
@@ -740,7 +884,7 @@ const autoArrangeFields = () => {
 
     y,
 
-    width: getPlaceholderFieldWidth(item.field)
+    width: getPlaceholderFieldWidth(item.field),
 
   });
 
@@ -779,8 +923,40 @@ const autoArrangeFields = () => {
   setSelectedField(null);
 };
 
+const bringForward = () => {
+  if (!selectedField) return;
+
+  setFields((current) => {
+    const index = current.findIndex((f) => f.id === selectedField);
+
+    if (index === current.length - 1) return current;
+
+    const next = [...current];
+
+    [next[index], next[index + 1]] = [next[index + 1], next[index]];
+
+    return next;
+  });
+};
+
+const sendBackward = () => {
+  if (!selectedField) return;
+
+  setFields((current) => {
+    const index = current.findIndex((f) => f.id === selectedField);
+
+    if (index <= 0) return current;
+
+    const next = [...current];
+
+    [next[index], next[index - 1]] = [next[index - 1], next[index]];
+
+    return next;
+  });
+};
+
   return (
-    <div
+  <div
       ref={editorRootRef}
       className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start"
     >
@@ -879,8 +1055,9 @@ onDrop={(event) => {
     x,
     y,
     width: getPlaceholderFieldWidth(
-      dragPlaceholder.field
-    )
+  dragPlaceholder.field
+),
+height: 50,
   };
 
   setFields((prev) => [...prev, newField]);
@@ -936,7 +1113,7 @@ top: guideLines.horizontal * displayZoom
                   const isFreeText = typeof field.text === 'string';
                   const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
                   return (
-                    <div
+                      <div
                       key={`${page.pageNumber}-${field.id}`}
                       role="button"
                       tabIndex={0}
@@ -944,6 +1121,9 @@ top: guideLines.horizontal * displayZoom
                         setSelectedField(field.id);
                         setActivePage(field.pageNumber ?? 1);
                       }}
+                      onDoubleClick={() => {
+  setEditingField(field.id);
+}}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           setSelectedField(field.id);
@@ -951,8 +1131,9 @@ top: guideLines.horizontal * displayZoom
                         }
                       }}
                       onPointerDown={(event) => {
-                        event.preventDefault();
-                        const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
+                      event.preventDefault();
+                      if (field.locked) return;
+                      const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
                         if (!rect) {
                           return;
                         }
@@ -966,27 +1147,34 @@ top: guideLines.horizontal * displayZoom
                           offsetY: pointerY - field.y
                         });
                       }}
-                      className={`absolute cursor-grab active:cursor-grabbing select-none rounded-md px-1 py-0.5 transition-all duration-75 ${
+                      className={`absolute flex items-center justify-center cursor-grab active:cursor-grabbing select-none rounded-md px-1 py-0.5 transition-all duration-75 ${
                         isSelected
                           ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent'
                           : 'hover:ring-1 hover:ring-accent-200'
                       }`}
                       style={{
-                        left: field.x * displayZoom,
-                        top: field.y * displayZoom,
-                        width: field.width * displayZoom,
-                        fontSize: field.fontSize * displayZoom,
-                        color: field.color,
-                        fontFamily: field.fontFamily,
-                        textAlign: field.align,
-                        lineHeight: 1.1
-                      }}
+  left: field.x * displayZoom,
+  top: field.y * displayZoom,
+  width: field.width * displayZoom,
+  height: (field.height ?? 50) * displayZoom,
+  fontSize: field.fontSize * displayZoom,
+  color: field.color,
+  fontWeight: field.fontWeight ?? "normal",
+  fontStyle: field.fontStyle ?? "normal",
+  transform: `rotate(${field.rotation ?? 0}deg)`,
+transformOrigin: "center",
+  textDecoration: field.textDecoration ?? "none",
+  fontFamily: field.fontFamily,
+  textAlign: field.align,
+  lineHeight: 1.1
+}}
                     >
                       {isSelected ? (
                         <button
                           type="button"
                           onClick={(event) => {
-                            event.stopPropagation();
+                            event.preventDefault();
+                          event.stopPropagation();
                             removeSelected();
                           }}
                           className="absolute -right-3 -top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-md transition hover:bg-red-50"
@@ -995,35 +1183,94 @@ top: guideLines.horizontal * displayZoom
                           <X className="h-4 w-4" />
                         </button>
                       ) : null}
-                      <span
-                        className={`pointer-events-none block bg-white/0 ${
-                          isFreeText ? 'whitespace-pre-wrap break-words' : 'whitespace-nowrap'
-                        }`}
-                      >
-                        {displayText}
-                      </span>
-                      {isSelected && (
-  <div
-    onPointerDown={(event) => {
-      event.stopPropagation();
-
-      setResizeState({
-        field: field.id,
-        startX: event.clientX,
-        startWidth: field.width
+                      {editingField === field.id ? (
+  <input
+    autoFocus
+    value={field.text ?? displayText}
+    onChange={(e) => {
+      updateField(field.id, {
+        text: e.target.value,
       });
     }}
-    className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-blue-500 shadow"
+    onBlur={() => setEditingField(null)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") {
+        setEditingField(null);
+      }
+    }}
+    className="w-full border-none bg-transparent text-center outline-none"
   />
+) : (
+  <>
+    <span
+      className={`pointer-events-none block bg-white/0 ${
+        isFreeText
+          ? "whitespace-pre-wrap break-words"
+          : "whitespace-nowrap"
+      }`}
+    >
+      {displayText}
+    </span>
+
+    {isSelected && (
+  <>
+    <div
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        setRotateState({
+          field: field.id,
+          startAngle: field.rotation ?? 0,
+        });
+      }}
+      className="absolute left-1/2 -top-8 h-5 w-5 -translate-x-1/2 rounded-full border-2 border-white bg-green-500 shadow cursor-grab"
+    />
+
+    {[
+        { h: "left", c: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+        { h: "right", c: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+        { h: "top", c: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+        { h: "bottom", c: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+        { h: "top-left", c: "-left-2 -top-2 cursor-nwse-resize" },
+        { h: "top-right", c: "-right-2 -top-2 cursor-nesw-resize" },
+        { h: "bottom-left", c: "-left-2 -bottom-2 cursor-nesw-resize" },
+        { h: "bottom-right", c: "-right-2 -bottom-2 cursor-nwse-resize" }
+      ].map((item) => (
+        <div
+          key={item.h}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (field.locked) return;
+
+            setResizeState({
+  field: field.id,
+  handle: item.h,
+  startX: event.clientX,
+  startY: event.clientY,
+  startWidth: field.width,
+  startLeft: field.x,
+  startTop: field.y,
+startHeight: field.height ?? 50,
+startFontSize: field.fontSize
+});
+          }}
+          className={`absolute h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow ${item.c}`}
+        />
+      ))}
+  </>
 )}
-                    </div>
+  </>
+)}
+                                        </div>
                   );
                 })}
-              </div>
-            );
-            })}
           </div>
+            );
+          })}
         </div>
+      </div>
       </section>
 
       <aside className="order-1 min-w-0 space-y-6 xl:order-2">
@@ -1217,15 +1464,51 @@ top: guideLines.horizontal * displayZoom
             </p>
           </div>
           {selected ? (
-            <button
-              type="button"
-              onClick={removeSelected}
-              className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
-            >
-              <Trash2 className="h-4 w-4" />
-              Remove
-            </button>
-          ) : null}
+  <div className="space-y-3">
+
+    <button
+      type="button"
+      onClick={removeSelected}
+      className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium"
+    >
+      <Trash2 className="h-4 w-4" />
+      Remove
+    </button>
+
+    <div className="grid grid-cols-2 gap-2">
+
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={bringForward}
+      >
+        Front
+      </Button>
+
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={sendBackward}
+      >
+        Back
+      </Button>
+
+      <Button
+  type="button"
+  variant="secondary"
+  onClick={() =>
+    updateField(selected.id, {
+      locked: !selected.locked,
+    })
+  }
+>
+  {selected.locked ? "🔓 Unlock" : "🔒 Lock"}
+</Button>
+
+    </div>
+
+  </div>
+) : null}
         </div>
 
         {selected ? (
@@ -1322,49 +1605,183 @@ top: guideLines.horizontal * displayZoom
                 value={selected.width}
                 onChange={(event) => updateField(selected.id, { width: Number(event.target.value) })}
               />
+              <div>
+  <label className="mb-2 block text-sm font-medium text-slate-700">
+    Height
+  </label>
+
+  <Input
+    type="number"
+    value={selected.height ?? 50}
+    onChange={(event) =>
+      updateField(selected.id, {
+        height: Number(event.target.value)
+      })
+    }
+  />
+</div>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font size</label>
-              <Input
-                type="number"
-                value={selected.fontSize}
-                onChange={(event) => updateField(selected.id, { fontSize: clampFontSize(Number(event.target.value)) })}
-              />
+              <>
+  <input
+    type="range"
+    min={8}
+    max={120}
+    value={selected.fontSize}
+    onChange={(e) =>
+      updateField(selected.id, {
+        fontSize: Number(e.target.value),
+      })
+    }
+    className="w-full"
+  />
+
+  <Input
+    type="number"
+    value={selected.fontSize}
+    onChange={(e) =>
+      updateField(selected.id, {
+        fontSize: Number(e.target.value),
+      })
+    }
+  />
+</>
             </div>
+            <div>
+  <label className="mb-2 block text-sm font-medium text-slate-700">
+    Rotation
+  </label>
+
+  <input
+    type="range"
+    min={-180}
+    max={180}
+    value={selected.rotation ?? 0}
+    onChange={(e) =>
+      updateField(selected.id, {
+        rotation: Number(e.target.value),
+      })
+    }
+    className="w-full"
+  />
+
+  <Input
+    type="number"
+    value={selected.rotation ?? 0}
+    onChange={(e) =>
+      updateField(selected.id, {
+        rotation: Number(e.target.value),
+      })
+    }
+  />
+</div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font family</label>
               <select
-                value={selected.fontFamily}
-                onChange={(event) => updateField(selected.id, { fontFamily: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
-              >
-                <option value="Poppins">Poppins</option>
-                <option value="Arial">Arial</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="Courier New">Courier New</option>
-              </select>
+  value={selected.fontFamily}
+  onChange={(e) =>
+    updateField(selected.id, {
+      fontFamily: e.target.value
+    })
+  }
+  className="w-full rounded-xl border border-slate-200 p-2"
+>
+  <option>Arial</option>
+  <option>Times New Roman</option>
+  <option>Calibri</option>
+  <option>Georgia</option>
+  <option>Verdana</option>
+  <option>Tahoma</option>
+  <option>Courier New</option>
+</select>
+<div>
+  <label className="mb-2 block text-sm font-medium text-slate-700">
+    Alignment
+  </label>
+
+  <div className="flex gap-2">
+    {["left", "center", "right"].map((align) => (
+      <Button
+        key={align}
+        type="button"
+        variant={selected.align === align ? "primary" : "ghost"}
+        onClick={() =>
+          updateField(selected.id, {
+            align: align as "left" | "center" | "right",
+          })
+        }
+      >
+        {align}
+      </Button>
+    ))}
+  </div>
+</div>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Color</label>
-              <Input
-                type="color"
-                value={selected.color}
-                onChange={(event) => updateField(selected.id, { color: event.target.value })}
-                className="h-12 p-1"
-              />
+              <input
+  type="color"
+  value={selected.color}
+  onChange={(e) =>
+    updateField(selected.id, {
+      color: e.target.value,
+    })
+  }
+  className="h-10 w-full cursor-pointer rounded-lg border border-slate-200"
+/>
             </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Align</label>
-              <select
-                value={selected.align}
-                onChange={(event) => updateField(selected.id, { align: event.target.value as CertificateFieldConfig['align'] })}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
-              >
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </div>
+<div className="mt-4 flex gap-2">
+  <Button
+  type="button"
+  variant={selected.fontWeight === "bold" ? "primary" : "ghost"}
+  onClick={() =>
+    updateField(selected.id, {
+      fontWeight:
+        selected.fontWeight === "bold"
+          ? "normal"
+          : "bold",
+    })
+  }
+  className="w-12 h-12 text-xl font-bold"
+>
+  B
+</Button>
+<Button
+  type="button"
+  variant={selected.fontStyle === "italic" ? "primary" : "ghost"}
+  onClick={() =>
+    updateField(selected.id, {
+      fontStyle:
+        selected.fontStyle === "italic"
+          ? "normal"
+          : "italic",
+    })
+  }
+  className="w-12 h-12 text-xl italic"
+>
+  I
+</Button>
+<Button
+  type="button"
+  variant={
+    selected.textDecoration === "underline"
+      ? "primary"
+      : "ghost"
+  }
+  onClick={() =>
+    updateField(selected.id, {
+      textDecoration:
+        selected.textDecoration === "underline"
+          ? "none"
+          : "underline",
+    })
+  }
+  className="w-12 h-12 text-xl underline"
+>
+  U
+</Button>
+</div>
           </div>
           ) : (
             <p className="mt-5 text-sm leading-6 text-slate-500">Click a placeholder to place it on the certificate, then drag it where you want it.</p>
