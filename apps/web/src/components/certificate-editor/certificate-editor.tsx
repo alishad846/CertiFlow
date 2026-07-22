@@ -307,7 +307,7 @@ export function CertificateEditor({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [dragState, zoom]);
+  }, [dragState, displayZoom]);
 
   useEffect(() => {
   if (!resizeState) {
@@ -334,12 +334,12 @@ export function CertificateEditor({
         if (resizeState.direction === 'right') {
           return {
             ...field,
-            width: Math.max(60, resizeState.startWidth + deltaX)
+            width: Math.max(30, resizeState.startWidth + deltaX)
           };
         }
 
         const nextWidth = Math.max(
-          60,
+          30,
           resizeState.startWidth - deltaX
         );
 
@@ -1484,8 +1484,8 @@ onDoubleClick={(event) => {
               <input
                 type="range"
                 min="0.5"
-                max="2"
-                step="0.1"
+                max="3"
+                step="0.05"
                 value={zoom}
                 onChange={(event) => setZoom(Number(event.target.value))}
                 className="w-full accent-accent-600"
@@ -1612,7 +1612,7 @@ onDoubleClick={(event) => {
               <Input
                 type="number"
                 value={selected.width}
-                onChange={(event) => updateField(selected.id, { width: Number(event.target.value) })}
+                onChange={(event) => updateField(selected.id, { width: Math.max(30, Number(event.target.value)) })}
               />
             </div>
             <div>
