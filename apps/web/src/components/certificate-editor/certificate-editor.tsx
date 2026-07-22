@@ -38,6 +38,7 @@ const defaultFieldStyle: CertificateFieldConfig = {
 type EditorFieldConfig = CertificateFieldConfig & {
   id: string;
   isOcrText?: boolean;
+  originalOcrText?: string;
 };
 
 type PreviewPage = {
@@ -65,7 +66,22 @@ function createEditorFieldId(fieldName: string, index: number) {
   const safeFieldName = fieldName.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'field';
   return `${safeFieldName}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`;
 }
+function normalizeOcrText(value?: string) {
+  return (value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+function areOcrItemsOnSameLine(
+  firstBox: { y0: number; y1: number },
+  secondBox: { y0: number; y1: number },
+  tolerance = 10
+) {
+  const firstCenterY = (firstBox.y0 + firstBox.y1) / 2;
+  const secondCenterY = (secondBox.y0 + secondBox.y1) / 2;
 
+  return Math.abs(firstCenterY - secondCenterY) <= tolerance;
+}
 function normalizeEditorFields(fields: CertificateFieldConfig[]) {
   return fields.map((field, index) => {
     const existingId = (field as CertificateFieldConfig & { id?: string }).id?.trim();
@@ -78,7 +94,23 @@ function normalizeEditorFields(fields: CertificateFieldConfig[]) {
 }
 
 function stripEditorFieldIds(fields: EditorFieldConfig[]) {
-  return fields.map(({ id, ...field }) => field);
+  return fields
+    .filter((field) => {
+      const isUnchangedOcrText =
+        field.isOcrText &&
+        field.originalOcrText !== undefined &&
+        field.text === field.originalOcrText;
+
+      return !isUnchangedOcrText;
+    })
+    .map(
+      ({
+        id,
+        isOcrText,
+        originalOcrText,
+        ...field
+      }) => field
+    );
 }
 
 function getPlaceholderFieldWidth(fieldName: string) {
@@ -149,6 +181,7 @@ export function CertificateEditor({
   const [saveMessage, setSaveMessage] = useState('');
   const [extractingText, setExtractingText] = useState(false);
   const [extractMessage, setExtractMessage] = useState('');
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [dragState, setDragState] = useState<{
     field: string;
     pageNumber: number;
@@ -558,11 +591,25 @@ const extractExistingTextFromTemplate = async () => {
   }
 
   setExtractingText(true);
-  setExtractMessage('Scanning template text...');
+setOcrProgress(0);
+setExtractMessage('Scanning template text...');
 
-  try {
-    const worker = await createWorker('eng');
-    await worker.setParameters({
+let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+
+try {
+  worker = await createWorker('eng', 1, {
+  logger: (message) => {
+    if (
+      message.status === 'recognizing text' &&
+      typeof message.progress === 'number'
+    ) {
+      setOcrProgress(
+        Math.round(message.progress * 100)
+      );
+    }
+  }
+});
+  await worker.setParameters({
   tessedit_pageseg_mode: PSM.SINGLE_BLOCK
 });
 
@@ -584,7 +631,6 @@ await new Promise<void>((resolve, reject) => {
 
 const scaleX = page.width / sourceImage.naturalWidth;
 const scaleY = page.height / sourceImage.naturalHeight;
-    await worker.terminate();
     
     type OcrItem = {
   text?: string;
@@ -641,7 +687,12 @@ const ignoredWords = [
   "JOHNS HOPKINS",
   "JOHNS HOPKINS UNIVERSITY",
   "COURSE CERTIFICATE",
-  "COURSERA"
+  "COURSERA",
+  "PAGE",
+  "SIGNATURE",
+  "DATE",
+  "LOGO",
+  "CERTIFICATE"
 ];
 
 if (
@@ -654,7 +705,7 @@ if (
 
 return Boolean(
   item.bbox &&
-  (item.confidence ?? 100) > 50
+  (item.confidence ?? 100) > 70
 );
 });
 
@@ -666,25 +717,259 @@ if (!detectedItems.length) {
   );
   return;
 }
+const sortedDetectedItems = [...detectedItems].sort((a, b) => {
+  if (!a.bbox || !b.bbox) {
+    return 0;
+  }
 
-const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => {
+  const verticalDifference = a.bbox.y0 - b.bbox.y0;
+
+  if (Math.abs(verticalDifference) > 10) {
+    return verticalDifference;
+  }
+
+  return a.bbox.x0 - b.bbox.x0;
+});
+
+const groupedDetectedItems: Array<
+  Array<(typeof sortedDetectedItems)[number]>
+> = [];
+
+sortedDetectedItems.forEach((item) => {
+  const text = item.text?.trim();
+
+  if (!item.bbox || !text) {
+    return;
+  }
+
+  const currentLine =
+    groupedDetectedItems[groupedDetectedItems.length - 1];
+
+  if (!currentLine) {
+    groupedDetectedItems.push([item]);
+    return;
+  }
+
+  const firstItemInLine = currentLine[0];
+
+  const lastItemInLine = currentLine[currentLine.length - 1];
+
+const horizontalGap =
+  lastItemInLine?.bbox && item.bbox
+    ? item.bbox.x0 - lastItemInLine.bbox.x1
+    : Number.POSITIVE_INFINITY;
+
+const isSameLine =
+  firstItemInLine.bbox &&
+  areOcrItemsOnSameLine(
+    firstItemInLine.bbox,
+    item.bbox,
+    14
+  );
+
+const isReasonableGap = horizontalGap >= -5 && horizontalGap <= 80;
+
+if (isSameLine && isReasonableGap) {
+  currentLine.push(item);
+} else {
+  groupedDetectedItems.push([item]);
+}
+});
+const mergedDetectedItems = groupedDetectedItems
+  .map((lineItems) => {
+    const sortedLineItems = [...lineItems].sort((a, b) => {
+      if (!a.bbox || !b.bbox) {
+        return 0;
+      }
+
+      return a.bbox.x0 - b.bbox.x0;
+    });
+
+    const validItems = sortedLineItems.filter(
+      (item) => item.bbox && item.text?.trim()
+    );
+
+    const firstItem = validItems[0];
+
+    if (!firstItem?.bbox) {
+      return null;
+    }
+
+    const mergedText = validItems.reduce(
+  (result, item, index) => {
+    const currentText = item.text?.trim() ?? '';
+
+    if (!currentText) {
+      return result;
+    }
+
+    if (index === 0) {
+      return currentText;
+    }
+
+    const previousItem = validItems[index - 1];
+
+    if (!previousItem?.bbox || !item.bbox) {
+      return `${result} ${currentText}`;
+    }
+
+    const horizontalGap =
+      item.bbox.x0 - previousItem.bbox.x1;
+
+    const shouldAvoidSpace =
+      /^[,.;:!?%)]/.test(currentText) ||
+      /[(]$/.test(result);
+
+    if (shouldAvoidSpace) {
+      return `${result}${currentText}`;
+    }
+
+    const spaces =
+      horizontalGap > 45
+        ? '   '
+        : horizontalGap > 20
+          ? '  '
+          : ' ';
+
+    return `${result}${spaces}${currentText}`;
+  },
+  ''
+);
+if (!mergedText.trim()) {
+  return null;
+}
+    const x0 = Math.min(
+      ...validItems.map((item) => item.bbox!.x0)
+    );
+
+    const y0 = Math.min(
+      ...validItems.map((item) => item.bbox!.y0)
+    );
+
+    const x1 = Math.max(
+      ...validItems.map((item) => item.bbox!.x1)
+    );
+
+    const y1 = Math.max(
+      ...validItems.map((item) => item.bbox!.y1)
+    );
+
+    const confidenceValues = validItems
+      .map((item) => item.confidence)
+      .filter(
+        (confidence): confidence is number =>
+          typeof confidence === 'number'
+      );
+
+    const averageConfidence =
+      confidenceValues.length > 0
+        ? confidenceValues.reduce(
+            (total, confidence) => total + confidence,
+            0
+          ) / confidenceValues.length
+        : 100;
+
+    return {
+      ...firstItem,
+      text: mergedText,
+      confidence: averageConfidence,
+      bbox: {
+        x0,
+        y0,
+        x1,
+        y1,
+      },
+    };
+  })
+  .filter(
+    (
+      item
+    ): item is NonNullable<typeof item> => item !== null
+  );
+
+const extractedFields = mergedDetectedItems
+  .map((item, index): EditorFieldConfig | null => {
   const text = item.text?.trim() ?? '';
   const box = item.bbox!;
+  const boxWidth = (box.x1 - box.x0) * scaleX;
+const boxHeight = (box.y1 - box.y0) * scaleY;
 
+if (boxWidth < 30 || boxHeight < 8) {
+  return null;
+}
+  const nextX = Math.max(0, box.x0 * scaleX);
+const nextY = Math.max(0, box.y0 * scaleY - 2);
+const alreadyExistsInEditor = fields.some((existingField) => {
+  return (
+    existingField.isOcrText &&
+    normalizeOcrText(existingField.text) === normalizeOcrText(text) &&
+    Math.abs(existingField.x - nextX) < 10 &&
+    Math.abs(existingField.y - nextY) < 10 &&
+    existingField.pageNumber === page.pageNumber
+  );
+});
+
+if (alreadyExistsInEditor) {
+  return null;
+}
+
+const isDuplicate = mergedDetectedItems
+  .slice(0, index)
+  .some((previousItem) => {
+    if (!previousItem.bbox) {
+      return false;
+    }
+
+    const previousText = normalizeOcrText(previousItem.text);
+    const previousX = Math.max(0, previousItem.bbox.x0 * scaleX);
+    const previousY = Math.max(
+      0,
+      previousItem.bbox.y0 * scaleY - 2
+    );
+
+    return (
+      previousText === normalizeOcrText(text) &&
+      Math.abs(previousX - nextX) < 10 &&
+      Math.abs(previousY - nextY) < 10
+    );
+  });
+
+if (isDuplicate) {
+  return null;
+}
+const safeY = Math.min(
+  Math.max(0, nextY),
+  Math.max(0, page.height - boxHeight)
+);
+
+    const estimatedFontSize = Math.max(
+  12,
+  Math.min(48, boxHeight * 0.78)
+);
   return {
     ...defaultFieldStyle,
     id: createEditorFieldId('ocr-text', fields.length + index),
     field: `ocr_text_${Date.now()}_${index}`,
     isOcrText: true,
+    originalOcrText: text,
     pageNumber: page.pageNumber,
     text,
-    x: Math.max(0, box.x0 * scaleX),
-    y: Math.max(0, box.y0 * scaleY),
-    width: Math.max(80, (box.x1 - box.x0) * scaleX),
-    fontSize: clampFontSize(Math.max(12, (box.y1 - box.y0) * scaleY)),
+    x: nextX,
+    y: safeY,
+    width: Math.max(
+  40,
+  Math.min(
+    page.width - nextX,
+    boxWidth + 12
+  )
+),
+fontSize: clampFontSize(estimatedFontSize),
     align: 'left'
   };
-});
+})
+  .filter(
+    (field): field is EditorFieldConfig => field !== null
+  );
    setFields((current) => [
   ...current.filter((field) => !field.isOcrText),
   ...extractedFields
@@ -692,13 +977,25 @@ const extractedFields: EditorFieldConfig[] = detectedItems.map((item, index) => 
      
     setSelectedField(extractedFields[0]?.id ?? null);
     setEditingFieldId(extractedFields[0]?.id ?? null);
+    setOcrProgress(100);
     setExtractMessage(`Detected ${extractedFields.length} editable text layers.`);
   } catch (error) {
-    setExtractMessage(error instanceof Error ? error.message : 'Failed to extract text.');
+    setOcrProgress(0);
+
+    setExtractMessage(
+      error instanceof Error
+        ? error.message
+        : 'Failed to extract text.'
+    );
   } finally {
+    if (worker) {
+      await worker.terminate();
+    }
+
     setExtractingText(false);
   }
 };
+
   const changeSelectedFontSize = (delta: number) => {
     if (!selectedField) {
       return;
@@ -840,6 +1137,10 @@ onDoubleClick={(event) => {
                   const isIssueDate = field.field === 'issue_date';
                   const isFreeText = typeof field.text === 'string';
                   const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
+                  const isUnchangedOcrText =
+  field.isOcrText &&
+  field.originalOcrText !== undefined &&
+  field.text === field.originalOcrText;
                   return (
                     <div
                       key={`${page.pageNumber}-${field.id}`}
@@ -889,9 +1190,9 @@ onDoubleClick={(event) => {
   color: field.color,
   fontFamily: field.fontFamily,
   textAlign: field.align,
-  lineHeight: 1.1,
-  backgroundColor: field.isOcrText ? '#ffffff' : 'transparent',
-  padding: field.isOcrText ? `${2 * displayZoom}px` : undefined
+  lineHeight: field.isOcrText ? 1.25 : 1.1,
+  backgroundColor: 'transparent',
+  padding: 0,
 }}
                     >
                       {isSelected ? (
@@ -1021,12 +1322,25 @@ onDoubleClick={(event) => {
   />
 ) : (
   <span
-    className={`pointer-events-none block bg-white/0 ${
-      isFreeText
+  className={`pointer-events-none block bg-white/0 ${
+    field.isOcrText
+      ? 'whitespace-nowrap overflow-hidden'
+      : isFreeText
         ? 'whitespace-pre-wrap break-words'
         : 'whitespace-nowrap'
-    }`}
-  >
+  }`}
+  style={{
+  opacity: isUnchangedOcrText && !isSelected ? 0 : 1,
+  backgroundColor:
+    field.isOcrText && !isUnchangedOcrText
+      ? '#ffffff'
+      : 'transparent',
+  padding:
+    field.isOcrText && !isUnchangedOcrText
+      ? '1px 3px'
+      : 0,
+}}
+>
     {displayText}
   </span>
                 )}
@@ -1056,6 +1370,22 @@ onDoubleClick={(event) => {
 >
   {extractingText ? 'Extracting text...' : 'Extract existing text'}
 </Button>
+{extractingText ? (
+  <div className="mt-3">
+    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+      <div
+        className="h-full bg-slate-900 transition-all duration-200"
+        style={{
+          width: `${ocrProgress}%`
+        }}
+      />
+    </div>
+
+    <p className="mt-2 text-xs font-medium text-slate-500">
+      Scanning certificate… {ocrProgress}%
+    </p>
+  </div>
+) : null}
 
 {extractMessage ? (
   <p className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
@@ -1338,11 +1668,14 @@ onDoubleClick={(event) => {
               </select>
             </div>
           </div>
-          ) : (
-            <p className="mt-5 text-sm leading-6 text-slate-500">Click a placeholder to place it on the certificate, then drag it where you want it.</p>
-          )}
-        </section>
-      </aside>
-    </div>
-  );
+        ) : (
+          <p className="mt-5 text-sm leading-6 text-slate-500">
+            Click a placeholder to place it on the certificate, then drag it
+            where you want it.
+          </p>
+        )}
+      </section>
+    </aside>
+  </div>
+);
 }
