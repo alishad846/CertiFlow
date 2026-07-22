@@ -1162,22 +1162,40 @@ onDoubleClick={(event) => {
                         }
                       }}
                       onPointerDown={(event) => {
-                        event.preventDefault();
-                        const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
-                        if (!rect) {
-                          return;
-                        }
-                        const pointerX = (event.clientX - rect.left) / displayZoom;
-                        const pointerY = (event.clientY - rect.top) / displayZoom;
-                        setSelectedField(field.id);
-                        setDragState({
-                          field: field.id,
-                          pageNumber: page.pageNumber,
-                          offsetX: pointerX - field.x,
-                          offsetY: pointerY - field.y
-                        });
-                      }}
-                      className={`absolute cursor-move select-none rounded-md px-1 py-0.5 transition ${
+  if (editingFieldId === field.id) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  event.currentTarget.setPointerCapture(event.pointerId);
+
+  const rect =
+    pageRefs.current[page.pageNumber]?.getBoundingClientRect();
+
+  if (!rect) {
+    return;
+  }
+
+  const pointerX =
+    (event.clientX - rect.left) / displayZoom;
+
+  const pointerY =
+    (event.clientY - rect.top) / displayZoom;
+
+  setSelectedField(field.id);
+  setActivePage(field.pageNumber ?? 1);
+  setEditingFieldId(null);
+
+  setDragState({
+    field: field.id,
+    pageNumber: page.pageNumber,
+    offsetX: pointerX - field.x,
+    offsetY: pointerY - field.y
+  });
+}}
+                       className={`absolute touch-none cursor-move select-none overflow-visible rounded-md px-1 py-0.5 transition ${
                         isSelected
                           ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent'
                           : 'hover:ring-1 hover:ring-accent-200'
