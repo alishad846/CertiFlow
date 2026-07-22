@@ -580,7 +580,7 @@ const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number,
 
   setFields((current) => [...current, nextField]);
   setSelectedField(id);
-  setEditingFieldId(id);
+  setEditingFieldId(null);
   setActivePage(pageNumber);
 };
 const extractExistingTextFromTemplate = async () => {
@@ -1202,7 +1202,7 @@ onDoubleClick={(event) => {
                             event.stopPropagation();
                             removeSelected();
                           }}
-                          className="absolute -right-3 -top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-md transition hover:bg-red-50"
+                          className="absolute -right-4 -top-4 z-30 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-red-500 bg-white text-red-600 shadow-lg transition hover:bg-red-50"
                           aria-label={`Remove ${field.field}`}
                         >
                           <X className="h-4 w-4" />
@@ -1282,7 +1282,9 @@ onDoubleClick={(event) => {
   <textarea
     autoFocus
     value={isFreeText ? field.text ?? '' : field.field}
-    onPointerDown={(event) => event.stopPropagation()}
+    onPointerDown={(event) => {
+  event.stopPropagation();
+}}
     onClick={(event) => event.stopPropagation()}
     onChange={(event) => {
       if (isFreeText) {
