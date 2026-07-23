@@ -174,6 +174,7 @@ export function CertificateEditor({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [zoom, setZoom] = useState(1);
+  const [fontSizeInput, setFontSizeInput] = useState('');
   const [fitZoom, setFitZoom] = useState(1);
   const displayZoom = zoom * fitZoom;
   const [saving, setSaving] = useState(false);
@@ -191,10 +192,13 @@ export function CertificateEditor({
   const [resizeState, setResizeState] = useState<{
   fieldId: string;
   pageNumber: number;
-  direction: 'left' | 'right';
+  direction: 'left' | 'right' | 'top' | 'bottom';
   startPointerX: number;
+  startPointerY: number;
   startX: number;
+  startY: number;
   startWidth: number;
+  startFontSize: number;
 } | null>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
 
@@ -284,16 +288,43 @@ export function CertificateEditor({
       const nextX = Math.max(0, pointerX - dragState.offsetX);
       const nextY = Math.max(0, pointerY - dragState.offsetY);
       setFields((current) =>
-        current.map((field) =>
-          field.id === dragState.field
-            ? {
-                ...field,
-                x: nextX,
-                y: nextY
-              }
-            : field
-        )
-      );
+  current.map((field) => {
+    if (field.id !== dragState.field) {
+      return field;
+    }
+
+    const maximumX = Math.max(
+      0,
+      rect.width / displayZoom - field.width
+    );
+
+    const estimatedHeight = Math.max(
+      20,
+      field.fontSize * 1.4
+    );
+
+    const maximumY = Math.max(
+      0,
+      rect.height / displayZoom - estimatedHeight
+    );
+
+    const clampedX = Math.min(nextX, maximumX);
+    const clampedY = Math.min(nextY, maximumY);
+
+    if (
+      Math.abs(field.x - clampedX) < 0.5 &&
+      Math.abs(field.y - clampedY) < 0.5
+    ) {
+      return field;
+    }
+
+    return {
+      ...field,
+      x: clampedX,
+      y: clampedY
+    };
+  })
+);
     };
 
     const handleUp = () => {
@@ -322,8 +353,17 @@ export function CertificateEditor({
     }
 
     const rect = container.getBoundingClientRect();
-    const pointerX = (event.clientX - rect.left) / displayZoom;
-    const deltaX = pointerX - resizeState.startPointerX;
+    const pointerX =
+  (event.clientX - rect.left) / displayZoom;
+
+const pointerY =
+  (event.clientY - rect.top) / displayZoom;
+
+const deltaX =
+  pointerX - resizeState.startPointerX;
+
+const deltaY =
+  pointerY - resizeState.startPointerY;
 
     setFields((current) =>
       current.map((field) => {
@@ -332,25 +372,55 @@ export function CertificateEditor({
         }
 
         if (resizeState.direction === 'right') {
-          return {
-            ...field,
-            width: Math.max(30, resizeState.startWidth + deltaX)
-          };
-        }
+  return {
+    ...field,
+    width: Math.max(
+      30,
+      resizeState.startWidth + deltaX
+    )
+  };
+}
 
-        const nextWidth = Math.max(
-          30,
-          resizeState.startWidth - deltaX
-        );
+if (resizeState.direction === 'left') {
+  const nextWidth = Math.max(
+    30,
+    resizeState.startWidth - deltaX
+  );
 
-        const appliedDelta =
-          resizeState.startWidth - nextWidth;
+  const appliedDelta =
+    resizeState.startWidth - nextWidth;
 
-        return {
-          ...field,
-          x: resizeState.startX + appliedDelta,
-          width: nextWidth
-        };
+  return {
+    ...field,
+    x: resizeState.startX + appliedDelta,
+    width: nextWidth
+  };
+}
+
+if (resizeState.direction === 'bottom') {
+  return {
+    ...field,
+    fontSize: clampFontSize(
+      resizeState.startFontSize + deltaY
+    )
+  };
+}
+
+const nextFontSize = clampFontSize(
+  resizeState.startFontSize - deltaY
+);
+
+const appliedFontDifference =
+  resizeState.startFontSize - nextFontSize;
+
+return {
+  ...field,
+  y: Math.max(
+    0,
+    resizeState.startY + appliedFontDifference
+  ),
+  fontSize: nextFontSize
+};
       })
     );
   };
@@ -428,6 +498,13 @@ if (!event.ctrlKey) {
   }, [selectedField]);
 
   const selected = useMemo(() => fields.find((field) => field.id === selectedField) ?? null, [fields, selectedField]);
+  useEffect(() => {
+  if (selected) {
+    setFontSizeInput(String(selected.fontSize));
+  } else {
+    setFontSizeInput('');
+  }
+}, [selected?.id, selected?.fontSize]);
   const previewSrc = getTemplatePreviewSrc(template);
   const isPdfTemplate = template.backgroundUrl.toLowerCase().endsWith('.pdf');
   const pagesToRender: PreviewPage[] = isPdfTemplate
@@ -559,11 +636,17 @@ if (!event.ctrlKey) {
       width: getFreeTextFieldWidth(nextText)
     };
 
-    setSelectedField(id);
-    setFields((current) => [...current, nextField]);
+   setFields((current) => [...current, nextField]);
+setSelectedField(id);
+setEditingFieldId(id);
   };
-const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number, y: number) => {
-  const nextText = text.trim();
+const addFreeTextFieldAtPosition = (
+  text: string,
+  pageNumber: number,
+  x: number,
+  y: number
+) => {
+  const nextText = text.trim() || DEFAULT_FREE_TEXT;
   const id = createEditorFieldId('text', fields.length);
   const fieldName = createUniqueFieldName('text', fields);
 
@@ -580,7 +663,7 @@ const addFreeTextFieldAtPosition = (text: string, pageNumber: number, x: number,
 
   setFields((current) => [...current, nextField]);
   setSelectedField(id);
-  setEditingFieldId(null);
+  setEditingFieldId(id);
   setActivePage(pageNumber);
 };
 const extractExistingTextFromTemplate = async () => {
@@ -1009,12 +1092,19 @@ fontSize: clampFontSize(estimatedFontSize),
   };
 
   const removeSelected = () => {
-    if (!selectedField) {
-      return;
-    }
-    setFields((current) => current.filter((field) => field.id !== selectedField));
-    setSelectedField(null);
-  };
+  if (!selectedField) {
+    return;
+  }
+
+  setFields((current) =>
+    current.filter((field) => field.id !== selectedField)
+  );
+
+  setSelectedField(null);
+  setEditingFieldId(null);
+  setDragState(null);
+  setResizeState(null);
+};
 
   return (
     <div
@@ -1151,10 +1241,13 @@ onDoubleClick={(event) => {
                         setActivePage(field.pageNumber ?? 1);
                       }}
                       onDoubleClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedField(field.id);
-                        setEditingFieldId(field.id);
-                      }}
+  event.preventDefault();
+  event.stopPropagation();
+
+  setSelectedField(field.id);
+  setActivePage(field.pageNumber ?? 1);
+  setEditingFieldId(field.id);
+}}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           setSelectedField(field.id);
@@ -1195,7 +1288,7 @@ onDoubleClick={(event) => {
     offsetY: pointerY - field.y
   });
 }}
-                       className={`absolute touch-none cursor-move select-none overflow-visible rounded-md px-1 py-0.5 transition ${
+                       className={`absolute touch-none cursor-move select-none overflow-visible rounded-md px-1 py-0.5 ${
                         isSelected
                           ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-transparent'
                           : 'hover:ring-1 hover:ring-accent-200'
@@ -1215,16 +1308,29 @@ onDoubleClick={(event) => {
                     >
                       {isSelected ? (
                         <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeSelected();
-                          }}
-                          className="absolute -right-4 -top-4 z-30 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-red-500 bg-white text-red-600 shadow-lg transition hover:bg-red-50"
-                          aria-label={`Remove ${field.field}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+  type="button"
+  onPointerDown={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }}
+  onClick={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setFields((current) =>
+      current.filter((item) => item.id !== field.id)
+    );
+
+    setSelectedField(null);
+    setEditingFieldId(null);
+    setDragState(null);
+    setResizeState(null);
+  }}
+  className="absolute -right-4 -top-4 z-50 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-red-500 bg-white text-red-600 shadow-lg hover:bg-red-50"
+  aria-label={`Remove ${field.field}`}
+>
+  <X className="pointer-events-none h-4 w-4" />
+</button>
                       ) : null}
                       {isSelected ? (
   <>
@@ -1234,7 +1340,8 @@ onDoubleClick={(event) => {
       className="absolute -left-2 top-1/2 z-20 h-8 w-3 -translate-y-1/2 cursor-ew-resize rounded-full border border-accent-500 bg-white shadow"
       onPointerDown={(event) => {
         event.preventDefault();
-        event.stopPropagation();
+event.stopPropagation();
+event.currentTarget.setPointerCapture(event.pointerId);
 
         const container = pageRefs.current[page.pageNumber];
 
@@ -1249,13 +1356,16 @@ onDoubleClick={(event) => {
         setDragState(null);
 
         setResizeState({
-          fieldId: field.id,
-          pageNumber: page.pageNumber,
-          direction: 'left',
-          startPointerX: pointerX,
-          startX: field.x,
-          startWidth: field.width
-        });
+  fieldId: field.id,
+  pageNumber: page.pageNumber,
+  direction: 'left',
+  startPointerX: pointerX,
+  startPointerY: 0,
+  startX: field.x,
+  startY: field.y,
+  startWidth: field.width,
+  startFontSize: field.fontSize
+});
       }}
     />
 
@@ -1269,8 +1379,8 @@ onDoubleClick={(event) => {
   }
 
   event.preventDefault();
-        event.preventDefault();
-        event.stopPropagation();
+event.stopPropagation();
+event.currentTarget.setPointerCapture(event.pointerId);
 
         const container = pageRefs.current[page.pageNumber];
 
@@ -1285,13 +1395,16 @@ onDoubleClick={(event) => {
         setDragState(null);
 
         setResizeState({
-          fieldId: field.id,
-          pageNumber: page.pageNumber,
-          direction: 'right',
-          startPointerX: pointerX,
-          startX: field.x,
-          startWidth: field.width
-        });
+  fieldId: field.id,
+  pageNumber: page.pageNumber,
+  direction: 'right',
+  startPointerX: pointerX,
+  startPointerY: 0,
+  startX: field.x,
+  startY: field.y,
+  startWidth: field.width,
+  startFontSize: field.fontSize
+});
       }}
     />
   </>
@@ -1299,11 +1412,15 @@ onDoubleClick={(event) => {
                       {editingFieldId === field.id ? (
   <textarea
     autoFocus
+    placeholder="Type your text here"
     value={isFreeText ? field.text ?? '' : field.field}
     onPointerDown={(event) => {
+  event.preventDefault();    
   event.stopPropagation();
 }}
-    onClick={(event) => event.stopPropagation()}
+    onFocus={() => {
+  setSelectedField(field.id);
+}}
     onChange={(event) => {
       if (isFreeText) {
         updateField(field.id, {
@@ -1315,7 +1432,16 @@ onDoubleClick={(event) => {
 });
       }
     }}
-    onBlur={() => setEditingFieldId(null)}
+    onBlur={() => {
+  setEditingFieldId(null);
+
+  if (isFreeText && !(field.text ?? '').trim()) {
+    setFields((current) =>
+      current.filter((item) => item.id !== field.id)
+    );
+    setSelectedField(null);
+  }
+}}
     onKeyDown={(event) => {
       event.stopPropagation();
 
@@ -1331,7 +1457,7 @@ onDoubleClick={(event) => {
         setEditingFieldId(null);
       }
     }}
-    className="block h-auto min-h-[1.4em] w-full resize-none overflow-hidden border-none bg-white/90 p-1 outline-none"
+    className="relative z-20 block min-h-[32px] w-full resize-none overflow-hidden border border-blue-500 bg-white p-1 outline-none"
     style={{
       color: field.color,
       fontFamily: field.fontFamily,
@@ -1636,10 +1762,33 @@ onDoubleClick={(event) => {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font size</label>
               <Input
-                type="number"
-                value={selected.fontSize}
-                onChange={(event) => updateField(selected.id, { fontSize: clampFontSize(Number(event.target.value)) })}
-              />
+  type="number"
+  min={MIN_FONT_SIZE}
+  max={MAX_FONT_SIZE}
+  value={fontSizeInput}
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setFontSizeInput(value);
+
+    if (value === '') {
+      return;
+    }
+
+    const nextFontSize = Number(value);
+
+    if (Number.isFinite(nextFontSize)) {
+      updateField(selected.id, {
+        fontSize: clampFontSize(nextFontSize)
+      });
+    }
+  }}
+  onBlur={() => {
+    if (fontSizeInput === '') {
+      setFontSizeInput(String(selected.fontSize));
+    }
+  }}
+/>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Font family</label>
