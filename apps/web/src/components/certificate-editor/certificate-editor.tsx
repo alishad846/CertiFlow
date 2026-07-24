@@ -1316,6 +1316,7 @@ onDoubleClick={(event) => {
   onClick={(event) => {
     event.preventDefault();
     event.stopPropagation();
+  
 
     setFields((current) =>
       current.filter((item) => item.id !== field.id)
@@ -1414,12 +1415,15 @@ event.currentTarget.setPointerCapture(event.pointerId);
     autoFocus
     placeholder="Type your text here"
     value={isFreeText ? field.text ?? '' : field.field}
-    onPointerDown={(event) => {
-  event.preventDefault();    
+    onPointerDown={(event) => {    
   event.stopPropagation();
 }}
-    onFocus={() => {
+    onFocus={(event) => {
   setSelectedField(field.id);
+
+  if (field.text === DEFAULT_FREE_TEXT) {
+    event.currentTarget.select();
+  }
 }}
     onChange={(event) => {
       if (isFreeText) {
@@ -1439,9 +1443,11 @@ event.currentTarget.setPointerCapture(event.pointerId);
     setFields((current) =>
       current.filter((item) => item.id !== field.id)
     );
+
     setSelectedField(null);
   }
 }}
+
     onKeyDown={(event) => {
       event.stopPropagation();
 
