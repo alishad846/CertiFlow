@@ -7,6 +7,7 @@ import billingRoutes from './billing';
 import companiesRoutes from './companies';
 import certificateTemplatesRoutes from './certificate-templates';
 import certificatesRoutes from './certificates';
+import subscriptionsRoutes from './subscriptions';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/logs', logsRoutes);
 router.use('/billing', billingRoutes);
 router.use('/companies', companiesRoutes);
 router.use('/certificate-templates', certificateTemplatesRoutes);
+router.use('/subscription', subscriptionsRoutes);
 router.use(certificatesRoutes);
 
 export default router;

@@ -20,6 +20,7 @@ import { emailQueue } from '../services/queue';
 import { renderTemplateString } from '../services/template-placeholders';
 import { issueCertificate, allocateUniquePublicId } from '../services/certificates';
 import { finalizeCertificatePdf } from '../services/certificate-finalize';
+import { getEntitlements, recordCertificateUsage } from '../services/subscriptions';
 
 function buildClaimEmailHtml(message: string, context: Record<string, unknown>, claimUrl: string) {
   const name = String(context?.name ?? '').trim() || 'there';
@@ -220,6 +221,10 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
   const claimMessage = claimSettingsResult?.rows[0]?.claim_message ?? batch.email_message ?? '';
   const claimSubject = claimSettingsResult?.rows[0]?.claim_subject ?? batch.name;
 
+  // Plan entitlements: signing is a paid-tier feature; usage is metered per issue.
+  const entitlements = isCertificateBatch ? await getEntitlements(batch.company_id) : null;
+  const canSign = entitlements?.features.signedPdfs ?? false;
+
   const docsResult = await pool.query<{
     id: string;
     recipient_name: string;
@@ -278,8 +283,10 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           const publicId = await allocateUniquePublicId();
           const finalized = await finalizeCertificatePdf(rendered.pdfPath, {
             verifyUrl: `${appBase}/verify/${publicId}`,
-            publicId
+            publicId,
+            sign: canSign
           });
+          await recordCertificateUsage(batch.company_id);
           const issued = await issueCertificate({
             companyId: batch.company_id,
             batchId: batch.id,

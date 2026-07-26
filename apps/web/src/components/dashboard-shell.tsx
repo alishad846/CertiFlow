@@ -16,6 +16,7 @@ import {
   Building2,
   Palette,
   Award,
+  Gem,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -202,6 +203,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </span>
                 </NavLink>
               ) : null}
+              <NavLink href="/plans" active={currentPath.startsWith('/plans')}>
+                <span className="flex items-center gap-2">
+                  <Gem className="h-4 w-4" /> Plans
+                </span>
+              </NavLink>
               <NavLink href="/security" active={currentPath.startsWith('/security')}>
                 <span className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" /> Security

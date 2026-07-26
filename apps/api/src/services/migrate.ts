@@ -408,7 +408,19 @@ const migrationStatements = [
   `ALTER TABLE IF EXISTS users
      ADD COLUMN IF NOT EXISTS two_factor_secret text`,
   `ALTER TABLE IF EXISTS users
-     ADD COLUMN IF NOT EXISTS two_factor_backup_codes jsonb NOT NULL DEFAULT '[]'::jsonb`
+     ADD COLUMN IF NOT EXISTS two_factor_backup_codes jsonb NOT NULL DEFAULT '[]'::jsonb`,
+
+  // ---- Usage-based subscriptions (tier definitions live in @certiflow/shared) ----
+  `CREATE TABLE IF NOT EXISTS company_subscriptions (
+     company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+     plan_key text NOT NULL DEFAULT 'starter',
+     status text NOT NULL DEFAULT 'active',
+     period_start timestamptz NOT NULL DEFAULT NOW(),
+     period_end timestamptz NOT NULL DEFAULT (NOW() + interval '30 days'),
+     certificates_used integer NOT NULL DEFAULT 0,
+     created_at timestamptz NOT NULL DEFAULT NOW(),
+     updated_at timestamptz NOT NULL DEFAULT NOW()
+   )`
 ];
 
 export async function migrateDatabaseSchema() {

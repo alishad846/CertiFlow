@@ -5,6 +5,7 @@ export type EmailStatus = 'pending' | 'sent' | 'failed';
 export type CompanyStatus = 'active' | 'blocked';
 
 export * from './billing';
+export * from './subscription';
 
 export interface DashboardStats {
   totalGeneratedDocuments: number;

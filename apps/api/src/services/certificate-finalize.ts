@@ -96,12 +96,13 @@ export type FinalizeResult = { signed: boolean };
  */
 export async function finalizeCertificatePdf(
   pdfPath: string,
-  opts: { verifyUrl: string; publicId: string }
+  opts: { verifyUrl: string; publicId: string; sign?: boolean }
 ): Promise<FinalizeResult> {
   const original = await fs.readFile(pdfPath);
   const stamped = Buffer.from(await stampQr(original, opts.verifyUrl, opts.publicId));
 
-  if (!env.CERT_SIGNING_ENABLED) {
+  // Signing is gated by both the global flag and the company's plan entitlement.
+  if (!env.CERT_SIGNING_ENABLED || opts.sign === false) {
     await fs.writeFile(pdfPath, stamped);
     return { signed: false };
   }
