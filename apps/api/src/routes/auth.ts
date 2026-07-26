@@ -10,8 +10,61 @@ import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../lib/rate-limit';
 import { getCompanyAccess } from '../services/companies';
 import { sendSystemEmail, getOtpEmailHtml } from '../services/email';
+import {
+  setupTwoFactor,
+  enableTwoFactor,
+  disableTwoFactor,
+  verifyTwoFactor
+} from '../services/two-factor';
 
 const router = Router();
+
+type LoginUserRow = {
+  id: string;
+  company_id: string | null;
+  role: 'super_admin' | 'company_admin';
+  email: string;
+  name: string;
+  password_hash: string;
+  token_version: number;
+  company_status: 'active' | 'blocked' | null;
+  can_create_batches: boolean | null;
+  can_request_upi: boolean | null;
+  can_view_reports: boolean | null;
+  two_factor_enabled: boolean;
+};
+
+const LOGIN_USER_SELECT = `
+  SELECT u.id, u.company_id, u.role, u.email, u.name, u.password_hash, u.token_version, u.two_factor_enabled,
+         c.status AS company_status, c.can_create_batches, c.can_request_upi, c.can_view_reports
+  FROM users u
+  LEFT JOIN companies c ON c.id = u.company_id`;
+
+function assertCompanyLoginAllowed(user: LoginUserRow, company: Awaited<ReturnType<typeof getCompanyAccess>> | null) {
+  if (!company || company.status !== 'active') {
+    throw new AppError('Company access is blocked', 403);
+  }
+  if (!company.can_create_batches && !company.can_request_upi && !company.can_view_reports) {
+    throw new AppError('Company access is blocked', 403);
+  }
+}
+
+/** Bump session version (company admins), issue the JWT, set the cookie, return the payload. */
+async function completeLogin(res: import('express').Response, user: LoginUserRow) {
+  const tokenVersion =
+    user.role === 'company_admin'
+      ? (
+          await pool.query<{ token_version: number }>(
+            `UPDATE users SET token_version = token_version + 1, updated_at = NOW() WHERE id = $1 RETURNING token_version`,
+            [user.id]
+          )
+        ).rows[0]?.token_version ?? user.token_version
+      : user.token_version;
+
+  const payload = { ...serializeUser(user), tokenVersion };
+  setAuthCookie(res, issueToken(payload));
+  return payload;
+}
 
 const registerSchema = z.object({
   name: z.string().min(2),
@@ -161,26 +214,7 @@ router.post(
   }),
   asyncHandler(async (req, res) => {
     const parsed = loginSchema.parse(req.body);
-    const result = await pool.query<{
-      id: string;
-      company_id: string | null;
-      role: 'super_admin' | 'company_admin';
-      email: string;
-      name: string;
-      password_hash: string;
-      token_version: number;
-      company_status: 'active' | 'blocked' | null;
-      can_create_batches: boolean | null;
-      can_request_upi: boolean | null;
-      can_view_reports: boolean | null;
-    }>(
-      `SELECT u.id, u.company_id, u.role, u.email, u.name, u.password_hash, u.token_version,
-              c.status AS company_status, c.can_create_batches, c.can_request_upi, c.can_view_reports
-       FROM users u
-       LEFT JOIN companies c ON c.id = u.company_id
-       WHERE u.email = $1`,
-      [parsed.email]
-    );
+    const result = await pool.query<LoginUserRow>(`${LOGIN_USER_SELECT} WHERE u.email = $1`, [parsed.email]);
 
     const user = result.rows[0];
     if (!user) {
@@ -194,32 +228,103 @@ router.post(
 
     if (user.role === 'company_admin') {
       const company = user.company_id ? await getCompanyAccess(user.company_id) : null;
-      if (!company || company.status !== 'active') {
-        throw new AppError('Company access is blocked', 403);
-      }
-      if (!company.can_create_batches && !company.can_request_upi && !company.can_view_reports) {
-        // company exists but all access is suspended; login stays blocked
-        throw new AppError('Company access is blocked', 403);
-      }
+      assertCompanyLoginAllowed(user, company);
     }
 
-    const tokenVersion =
-      user.role === 'company_admin'
-        ? (
-            await pool.query<{ token_version: number }>(
-              `UPDATE users
-               SET token_version = token_version + 1, updated_at = NOW()
-               WHERE id = $1
-               RETURNING token_version`,
-              [user.id]
-            )
-          ).rows[0]?.token_version ?? user.token_version
-        : user.token_version;
+    // If 2FA is on, don't issue a session yet — return a short-lived ticket and
+    // require the second factor via /auth/2fa/verify.
+    if (user.two_factor_enabled) {
+      const ticket = jwt.sign({ twofa: true }, env.JWT_SECRET, {
+        subject: user.id,
+        audience: '2fa-pending',
+        expiresIn: '10m'
+      });
+      res.json({ twoFactorRequired: true, ticket });
+      return;
+    }
 
-    const payload = { ...serializeUser(user), tokenVersion };
-    const token = issueToken(payload);
-    setAuthCookie(res, token);
+    const payload = await completeLogin(res, user);
     res.json({ user: payload });
+  })
+);
+
+// Step 2 of login: exchange a 2FA ticket + TOTP/backup code for a real session.
+router.post(
+  '/2fa/verify',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'Too many verification attempts.',
+    keyGenerator: (req) => `2fa:${req.ip}`
+  }),
+  asyncHandler(async (req, res) => {
+    const { ticket, token } = z
+      .object({ ticket: z.string().min(10), token: z.string().trim().min(4).max(20) })
+      .parse(req.body);
+
+    let userId: string;
+    try {
+      userId = (jwt.verify(ticket, env.JWT_SECRET, { audience: '2fa-pending' }) as { sub: string }).sub;
+    } catch {
+      throw new AppError('Your login session expired. Please sign in again.', 401);
+    }
+
+    const ok = await verifyTwoFactor(userId, token);
+    if (!ok) {
+      throw new AppError('Incorrect authentication code.', 401);
+    }
+
+    const result = await pool.query<LoginUserRow>(`${LOGIN_USER_SELECT} WHERE u.id = $1`, [userId]);
+    const user = result.rows[0];
+    if (!user) {
+      throw new AppError('Account not found.', 401);
+    }
+    if (user.role === 'company_admin') {
+      const company = user.company_id ? await getCompanyAccess(user.company_id) : null;
+      assertCompanyLoginAllowed(user, company);
+    }
+
+    const payload = await completeLogin(res, user);
+    res.json({ user: payload });
+  })
+);
+
+// Begin 2FA enrollment — returns a provisioning QR + secret (not yet enabled).
+router.post(
+  '/2fa/setup',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const data = await setupTwoFactor(req.user!.id, req.user!.email);
+    res.json(data);
+  })
+);
+
+// Confirm enrollment with a code from the authenticator app; returns backup codes once.
+router.post(
+  '/2fa/enable',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { token } = z.object({ token: z.string().trim().min(6).max(10) }).parse(req.body);
+    const backupCodes = await enableTwoFactor(req.user!.id, token);
+    res.json({ ok: true, backupCodes });
+  })
+);
+
+// Disable 2FA (requires password re-authentication).
+router.post(
+  '/2fa/disable',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { password } = z.object({ password: z.string().min(1) }).parse(req.body);
+    const row = await pool.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [
+      req.user!.id
+    ]);
+    const ok = row.rows[0] && (await bcrypt.compare(password, row.rows[0].password_hash));
+    if (!ok) {
+      throw new AppError('Incorrect password.', 401);
+    }
+    await disableTwoFactor(req.user!.id);
+    res.json({ ok: true });
   })
 );
 
@@ -316,7 +421,14 @@ router.get(
     if (!user) {
       throw new AppError('Not authenticated', 401);
     }
-    res.json({ user });
+    const tf = await pool.query<{ two_factor_enabled: boolean }>(
+      'SELECT two_factor_enabled FROM users WHERE id = $1',
+      [user.id]
+    );
+    const twoFactorEnabled = Boolean(tf.rows[0]?.two_factor_enabled);
+    // Super admins must protect the platform with 2FA.
+    const mustSetupTwoFactor = user.role === 'super_admin' && !twoFactorEnabled;
+    res.json({ user: { ...user, twoFactorEnabled, mustSetupTwoFactor } });
   })
 );
 

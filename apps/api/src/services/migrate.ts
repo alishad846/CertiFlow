@@ -400,7 +400,15 @@ const migrationStatements = [
      detail jsonb NOT NULL DEFAULT '{}'::jsonb,
      created_at timestamptz NOT NULL DEFAULT NOW()
    )`,
-  `CREATE INDEX IF NOT EXISTS idx_certificate_events_cert ON certificate_events(certificate_id, created_at DESC)`
+  `CREATE INDEX IF NOT EXISTS idx_certificate_events_cert ON certificate_events(certificate_id, created_at DESC)`,
+
+  // ---- Two-factor authentication (TOTP) ----
+  `ALTER TABLE IF EXISTS users
+     ADD COLUMN IF NOT EXISTS two_factor_enabled boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE IF EXISTS users
+     ADD COLUMN IF NOT EXISTS two_factor_secret text`,
+  `ALTER TABLE IF EXISTS users
+     ADD COLUMN IF NOT EXISTS two_factor_backup_codes jsonb NOT NULL DEFAULT '[]'::jsonb`
 ];
 
 export async function migrateDatabaseSchema() {
