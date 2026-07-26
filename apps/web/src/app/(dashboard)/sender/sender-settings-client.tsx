@@ -26,6 +26,8 @@ type EmailSettingsResponse = {
     smtpAllowInvalidCerts: boolean | null;
     smtpUser: string | null;
     enabled: boolean | null;
+    claimSubject: string | null;
+    claimMessage: string | null;
     updatedAt: string | null;
   } | null;
 };
@@ -70,6 +72,8 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
   const [smtpAllowInvalidCerts, setSmtpAllowInvalidCerts] = useState(false);
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
+  const [claimSubject, setClaimSubject] = useState('');
+  const [claimMessage, setClaimMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -123,6 +127,8 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
       setSmtpSecure(normalizeSmtpSecure(nextSmtpPort, Boolean(response.settings?.smtpSecure)));
       setSmtpAllowInvalidCerts(Boolean(response.settings?.smtpAllowInvalidCerts));
       setSmtpUser(response.settings?.smtpUser ?? '');
+      setClaimSubject(response.settings?.claimSubject ?? '');
+      setClaimMessage(response.settings?.claimMessage ?? '');
       setLastUpdated(response.settings?.updatedAt ?? null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load email settings');
@@ -207,6 +213,8 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
           smtpAllowInvalidCerts,
           smtpUser: smtpUser.trim(),
           smtpPass: smtpPass.trim() || undefined,
+          claimSubject: claimSubject.trim() || undefined,
+          claimMessage: claimMessage.trim() || undefined,
           enabled: isConfigComplete
         })
       });
@@ -282,6 +290,44 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
           <p>After saving, create a test batch and send it. The recipient should see <strong className="text-ink">your company email</strong> as the sender, not the platform&rsquo;s default sending address.</p>
         </div>
       </div>
+
+      <Card>
+        <p className="eyebrow">Certificate claim email</p>
+        <h2 className="mt-2 font-serif text-2xl text-ink">The message recipients receive</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-soft">
+          For certificate batches, recipients get this heartwarming note with a secure <strong className="text-ink">Claim</strong>{' '}
+          button (the PDF is not attached — they verify their email, then download). You can use placeholders like{' '}
+          <span className="font-mono text-ink">{'{{name}}'}</span> and <span className="font-mono text-ink">{'{{course}}'}</span>.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-ink-soft">Email subject</span>
+            <Input
+              value={claimSubject}
+              onChange={(event) => setClaimSubject(event.target.value)}
+              placeholder="Your certificate from {{company}} is ready"
+            />
+          </label>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-ink-soft">Message</span>
+            <textarea
+              value={claimMessage}
+              onChange={(event) => setClaimMessage(event.target.value)}
+              rows={5}
+              placeholder="Congratulations {{name}}! We're proud to award you this certificate. Click below to claim and download it."
+              className="w-full rounded-2xl border border-[color:var(--color-border)] bg-paper-bright px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-bronze focus:ring-4 focus:ring-bronze/15"
+            />
+          </label>
+          <p className="text-xs leading-5 text-ink-faint">
+            Leave blank to use a sensible default. The Claim button and secure link are added automatically.
+          </p>
+          <Button onClick={() => void saveSettings()} disabled={saving || (role === 'super_admin' && !companyId.trim())}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Save claim email
+          </Button>
+        </div>
+      </Card>
 
       {message ? (
         <div

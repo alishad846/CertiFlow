@@ -266,11 +266,13 @@ router.get(
       email_body_template: string | null;
       brand_logo_url: string | null;
       brand_primary_color: string | null;
+      claim_subject: string | null;
+      claim_message: string | null;
       updated_at: string | null;
     }>(
       `SELECT company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port,
               smtp_secure, smtp_allow_invalid_certs, smtp_user, enabled, email_subject_template, email_body_template,
-              brand_logo_url, brand_primary_color, updated_at
+              brand_logo_url, brand_primary_color, claim_subject, claim_message, updated_at
        FROM company_email_settings
        WHERE company_id = $1`,
       [companyId]
@@ -299,6 +301,8 @@ router.get(
           emailBodyTemplate: settings.email_body_template,
           brandLogoUrl: settings.brand_logo_url,
           brandPrimaryColor: settings.brand_primary_color,
+          claimSubject: settings.claim_subject,
+          claimMessage: settings.claim_message,
           updatedAt: settings.updated_at
         }
         : null
@@ -336,6 +340,8 @@ router.patch(
     const emailBodyTemplate = String(req.body.emailBodyTemplate ?? '').trim() || null;
     const brandLogoUrl = String(req.body.brandLogoUrl ?? '').trim() || null;
     const brandPrimaryColor = String(req.body.brandPrimaryColor ?? '').trim() || null;
+    const claimSubject = String(req.body.claimSubject ?? '').trim().slice(0, 200) || null;
+    const claimMessage = String(req.body.claimMessage ?? '').trim().slice(0, 4000) || null;
 
     const existing = await pool.query<{ smtp_pass: string | null }>(
       'SELECT smtp_pass FROM company_email_settings WHERE company_id = $1',
@@ -349,9 +355,9 @@ router.patch(
       `INSERT INTO company_email_settings (
          company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port,
          smtp_secure, smtp_allow_invalid_certs, smtp_user, smtp_pass, enabled, email_subject_template, email_body_template,
-         brand_logo_url, brand_primary_color, updated_at
+         brand_logo_url, brand_primary_color, claim_subject, claim_message, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
        ON CONFLICT (company_id)
        DO UPDATE SET
          sender_name = EXCLUDED.sender_name,
@@ -369,13 +375,16 @@ router.patch(
          email_body_template = EXCLUDED.email_body_template,
          brand_logo_url = EXCLUDED.brand_logo_url,
          brand_primary_color = EXCLUDED.brand_primary_color,
+         claim_subject = EXCLUDED.claim_subject,
+         claim_message = EXCLUDED.claim_message,
          updated_at = NOW()
        RETURNING company_id AS "companyId", sender_name AS "senderName", sender_email AS "senderEmail",
                  reply_to_name AS "replyToName", reply_to_email AS "replyToEmail",
                  smtp_host AS "smtpHost", smtp_port AS "smtpPort", smtp_secure AS "smtpSecure",
                  smtp_allow_invalid_certs AS "smtpAllowInvalidCerts", smtp_user AS "smtpUser", enabled, email_subject_template AS "emailSubjectTemplate",
                  email_body_template AS "emailBodyTemplate", brand_logo_url AS "brandLogoUrl",
-                 brand_primary_color AS "brandPrimaryColor", updated_at AS "updatedAt"` ,
+                 brand_primary_color AS "brandPrimaryColor", claim_subject AS "claimSubject",
+                 claim_message AS "claimMessage", updated_at AS "updatedAt"` ,
       [
         companyId,
         senderName,
@@ -392,7 +401,9 @@ router.patch(
         emailSubjectTemplate,
         emailBodyTemplate,
         brandLogoUrl,
-        brandPrimaryColor
+        brandPrimaryColor,
+        claimSubject,
+        claimMessage
       ]
     );
 
