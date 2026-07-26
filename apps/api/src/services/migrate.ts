@@ -26,6 +26,12 @@ const initializationStatements = [
      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'upi_payment_status') THEN
        CREATE TYPE upi_payment_status AS ENUM ('pending', 'submitted', 'approved', 'rejected');
      END IF;
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'certificate_status') THEN
+       CREATE TYPE certificate_status AS ENUM ('issued', 'claimed', 'revoked', 'superseded', 'expired');
+     END IF;
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'claim_status') THEN
+       CREATE TYPE claim_status AS ENUM ('unclaimed', 'otp_sent', 'verified', 'expired');
+     END IF;
    END
    $$`
 ];
@@ -325,7 +331,76 @@ const migrationStatements = [
      used boolean NOT NULL DEFAULT false,
      created_at timestamptz NOT NULL DEFAULT NOW()
    )`,
-  `CREATE INDEX IF NOT EXISTS idx_password_resets_email_otp ON password_resets(email, otp)`
+  `CREATE INDEX IF NOT EXISTS idx_password_resets_email_otp ON password_resets(email, otp)`,
+
+  // ---- Verifiable certificates: claim + verification + versioning + audit ----
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS claim_subject text`,
+  `ALTER TABLE IF EXISTS company_email_settings
+     ADD COLUMN IF NOT EXISTS claim_message text`,
+  `CREATE TABLE IF NOT EXISTS certificates (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     public_id text NOT NULL UNIQUE,
+     company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+     batch_id uuid REFERENCES batches(id) ON DELETE SET NULL,
+     document_id uuid REFERENCES documents(id) ON DELETE SET NULL,
+     template_id uuid REFERENCES certificate_templates(id) ON DELETE SET NULL,
+     recipient_name text NOT NULL,
+     recipient_email text NOT NULL,
+     title text,
+     status certificate_status NOT NULL DEFAULT 'issued',
+     current_version integer NOT NULL DEFAULT 1,
+     issued_at timestamptz NOT NULL DEFAULT NOW(),
+     claimed_at timestamptz,
+     revoked_at timestamptz,
+     revoked_reason text,
+     expires_at timestamptz,
+     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+     created_at timestamptz NOT NULL DEFAULT NOW(),
+     updated_at timestamptz NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_certificates_company ON certificates(company_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_certificates_recipient_email ON certificates(lower(recipient_email))`,
+  `CREATE INDEX IF NOT EXISTS idx_certificates_batch ON certificates(batch_id)`,
+  `CREATE TABLE IF NOT EXISTS certificate_versions (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     certificate_id uuid NOT NULL REFERENCES certificates(id) ON DELETE CASCADE,
+     version_no integer NOT NULL,
+     pdf_path text NOT NULL,
+     pdf_sha256 text NOT NULL,
+     signed boolean NOT NULL DEFAULT false,
+     data_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+     reason text,
+     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+     created_at timestamptz NOT NULL DEFAULT NOW(),
+     UNIQUE (certificate_id, version_no)
+   )`,
+  `CREATE TABLE IF NOT EXISTS certificate_claims (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     certificate_id uuid NOT NULL UNIQUE REFERENCES certificates(id) ON DELETE CASCADE,
+     claim_token_hash text NOT NULL UNIQUE,
+     email_on_record text NOT NULL,
+     status claim_status NOT NULL DEFAULT 'unclaimed',
+     otp_hash text,
+     otp_expires_at timestamptz,
+     otp_attempts integer NOT NULL DEFAULT 0,
+     otp_last_sent_at timestamptz,
+     verified_at timestamptz,
+     verified_ip text,
+     expires_at timestamptz NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT NOW(),
+     updated_at timestamptz NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE TABLE IF NOT EXISTS certificate_events (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     certificate_id uuid REFERENCES certificates(id) ON DELETE CASCADE,
+     event_type text NOT NULL,
+     ip text,
+     user_agent text,
+     detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+     created_at timestamptz NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_certificate_events_cert ON certificate_events(certificate_id, created_at DESC)`
 ];
 
 export async function migrateDatabaseSchema() {

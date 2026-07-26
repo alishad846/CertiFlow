@@ -55,7 +55,23 @@ const envSchema = z.object({
   RESEND_FROM: z.string().default('no-reply@certiflow.local'),
   N8N_WEBHOOK_URL: z.string().optional().default(''),
   EMAIL_BATCH_DELAY_MS: z.coerce.number().default(30000),
-  SOFFICE_PATH: z.string().default('soffice')
+  SOFFICE_PATH: z.string().default('soffice'),
+
+  // Public web origin used to build claim/verify links inside emails.
+  APP_URL: z.string().default('http://localhost:3000'),
+  // Certificate PDFs are stored here, OUTSIDE the publicly-served UPLOAD_DIR.
+  // They are streamed only through the claim-verified download endpoint.
+  CERT_STORE_DIR: z.string().default('./secure-certificates'),
+  CLAIM_TOKEN_TTL_DAYS: z.coerce.number().default(180),
+  CLAIM_OTP_TTL_MINUTES: z.coerce.number().default(10),
+  CLAIM_SESSION_TTL_MINUTES: z.coerce.number().default(30),
+  CLAIM_MAX_OTP_ATTEMPTS: z.coerce.number().default(5),
+
+  // Worker tuning — keep heavy work off the API process and throttle SMTP.
+  BATCH_WORKER_CONCURRENCY: z.coerce.number().default(1),
+  EMAIL_WORKER_CONCURRENCY: z.coerce.number().default(3),
+  EMAIL_RATE_MAX: z.coerce.number().default(20),
+  EMAIL_RATE_DURATION_MS: z.coerce.number().default(1000)
 });
 
 export const env = envSchema.parse(process.env);
