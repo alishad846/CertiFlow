@@ -18,6 +18,26 @@ import { renderCertificatePdf } from '../services/certificate-render';
 import { ensureDir, safeSegment } from '../services/fs';
 import { emailQueue } from '../services/queue';
 import { renderTemplateString } from '../services/template-placeholders';
+import { issueCertificate } from '../services/certificates';
+
+function buildClaimEmailHtml(message: string, context: Record<string, unknown>, claimUrl: string) {
+  const name = String(context?.name ?? '').trim() || 'there';
+  const resolved = renderTemplateString(
+    message || `Congratulations ${name}! Your certificate is ready to claim.`,
+    context
+  ).trim();
+  const safe = escapeHtml(resolved || `Congratulations ${name}!`).replace(/\r?\n/g, '<br>');
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px; background: #f4f1ea; border: 1px solid #d6cfc1; border-radius: 16px;">
+      <p style="color: #33436b; font-size: 16px; line-height: 1.7; margin: 0 0 8px;">${safe}</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${claimUrl}" style="display: inline-block; background: #0b1b3a; color: #f4f1ea; text-decoration: none; padding: 14px 34px; border-radius: 999px; font-weight: 600; letter-spacing: 0.02em;">Claim your certificate</a>
+      </div>
+      <p style="color: #6b769a; font-size: 13px; line-height: 1.6; text-align: center; margin: 0;">Or open this link in your browser:<br><a href="${claimUrl}" style="color: #94703f; word-break: break-all;">${claimUrl}</a></p>
+    </div>
+  `;
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -188,6 +208,17 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
 
   await pool.query(`UPDATE batches SET status = 'processing', updated_at = NOW() WHERE id = $1`, [batch.id]);
 
+  const isCertificateBatch = batch.template_type === 'certificate' && Boolean(certificateTemplate);
+  const appBase = env.APP_URL.replace(/\/+$/, '');
+  const claimSettingsResult = isCertificateBatch
+    ? await pool.query<{ claim_message: string | null; claim_subject: string | null }>(
+        `SELECT claim_message, claim_subject FROM company_email_settings WHERE company_id = $1`,
+        [batch.company_id]
+      )
+    : null;
+  const claimMessage = claimSettingsResult?.rows[0]?.claim_message ?? batch.email_message ?? '';
+  const claimSubject = claimSettingsResult?.rows[0]?.claim_subject ?? batch.name;
+
   const docsResult = await pool.query<{
     id: string;
     recipient_name: string;
@@ -224,6 +255,7 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
       const personalizedAttachmentDir = path.join(outputRoot, 'attachments', `${document.row_index}-${safeName}`);
       let primaryDocxPath: string | null = null;
       let primaryPdfPath: string | null = null;
+      let claimUrl: string | null = null;
 
       try {
         if (batch.template_type === 'certificate' && certificateTemplate) {
@@ -237,10 +269,22 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           });
           primaryDocxPath = rendered.pngPath;
           primaryPdfPath = rendered.pdfPath;
-          generatedAttachments.push({
-            path: rendered.pdfPath,
-            filename: `${baseName}.pdf`
+
+          // Certificate flow: store the PDF in the gated store, create the
+          // verifiable certificate + claim records, and email a claim link
+          // instead of attaching the PDF.
+          const issued = await issueCertificate({
+            companyId: batch.company_id,
+            batchId: batch.id,
+            documentId: document.id,
+            templateId: certificateTemplate.id,
+            recipientName: document.recipient_name,
+            recipientEmail: document.recipient_email,
+            title: certificateTemplate.name ?? batch.name,
+            sourcePdfPath: rendered.pdfPath,
+            dataSnapshot: certificateContext as Record<string, unknown>
           });
+          claimUrl = `${appBase}/claim/${issued.claimToken}`;
         } else {
           for (let templateIndex = 0; templateIndex < templateFiles.length; templateIndex += 1) {
             const template = templateFiles[templateIndex];
@@ -317,6 +361,14 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           );
         }
 
+        // Certificate: send a claim link, no PDF attachment (only company extras).
+        // Other document types: keep attaching the generated PDF(s).
+        const emailAttachments = claimUrl ? extraAttachments : [...generatedAttachments, ...extraAttachments];
+        const emailHtml = claimUrl
+          ? buildClaimEmailHtml(claimMessage, certificateContext, claimUrl)
+          : buildEmailHtml(batch.email_message ?? '', certificateContext, batch.attachment_message ?? undefined);
+        const emailSubject = claimUrl ? claimSubject : batch.name;
+
         await emailQueue.add(
           'send-email',
           {
@@ -325,11 +377,11 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             documentId: document.id,
             recipientName: document.recipient_name,
             recipientEmail: document.recipient_email,
-            subject: batch.name,
-            html: buildEmailHtml(batch.email_message ?? '', certificateContext, batch.attachment_message ?? undefined),
-            pdfPath: generatedAttachments[0]?.path,
-            attachmentName: generatedAttachments[0]?.filename,
-            attachments: [...generatedAttachments, ...extraAttachments],
+            subject: emailSubject,
+            html: emailHtml,
+            pdfPath: emailAttachments[0]?.path,
+            attachmentName: emailAttachments[0]?.filename,
+            attachments: emailAttachments,
             senderEmail: batch.sender_email ?? undefined,
             senderName: batch.sender_name ?? undefined
           },
