@@ -4,10 +4,33 @@ import { z } from 'zod';
 import { asyncHandler } from '../lib/async-handler';
 import { AppError } from '../lib/errors';
 import { rateLimit } from '../lib/rate-limit';
-import { getVerification, getCurrentVersionPdfPath, logCertificateEvent } from '../services/certificates';
+import { requireAuth } from '../middleware/auth';
+import {
+  getVerification,
+  getCurrentVersionPdfPath,
+  logCertificateEvent,
+  listCompanyCertificates,
+  revokeCertificate
+} from '../services/certificates';
 import { getClaimContext, requestClaimOtp, verifyClaimOtp, verifyClaimSession } from '../services/claims';
+import type { Request } from 'express';
 
 const router = Router();
+
+/** Company scope for authed cert routes: own company, or ?companyId= for super admin. */
+function resolveScopedCompanyId(req: Request): string {
+  if (req.user?.role === 'super_admin') {
+    const q = typeof req.query.companyId === 'string' ? req.query.companyId.trim() : '';
+    if (!q) {
+      throw new AppError('companyId query parameter is required for super admin.', 400);
+    }
+    return q;
+  }
+  if (!req.user?.companyId) {
+    throw new AppError('No company associated with this account.', 403);
+  }
+  return req.user.companyId;
+}
 
 const publicIdSchema = z.string().trim().regex(/^CF-[0-9A-Z]{4,8}-[0-9A-Z]{2,6}$/i, 'Invalid certificate id');
 const tokenSchema = z.string().trim().min(20).max(200);
@@ -100,9 +123,12 @@ router.get(
     }
 
     const { certificateId } = verifyClaimSession(bearer);
-    const pdfPath = await getCurrentVersionPdfPath(certificateId);
-    if (!pdfPath || !fs.existsSync(pdfPath)) {
+    const info = await getCurrentVersionPdfPath(certificateId);
+    if (!info || !fs.existsSync(info.pdfPath)) {
       throw new AppError('Certificate file not found.', 404);
+    }
+    if (info.status === 'revoked') {
+      throw new AppError('This certificate has been revoked and can no longer be downloaded.', 403);
     }
 
     await logCertificateEvent(certificateId, 'downloaded', {
@@ -113,7 +139,36 @@ router.get(
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="certificate.pdf"');
     res.setHeader('Cache-Control', 'private, no-store');
-    fs.createReadStream(pdfPath).pipe(res);
+    fs.createReadStream(info.pdfPath).pipe(res);
+  })
+);
+
+// -------- Authed: company's issued certificates --------
+router.get(
+  '/certificates/mine',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const companyId = resolveScopedCompanyId(req);
+    const before = typeof req.query.before === 'string' ? req.query.before : null;
+    const limit = Number(req.query.limit) || 25;
+    const certificates = await listCompanyCertificates(companyId, { limit, before });
+    res.json({ certificates });
+  })
+);
+
+// -------- Authed: revoke a certificate --------
+router.post(
+  '/certificates/:id/revoke',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const companyId = resolveScopedCompanyId(req);
+    const id = z.string().uuid().parse(req.params.id);
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) || null : null;
+    const ok = await revokeCertificate(id, companyId, reason, req.user?.id ?? null);
+    if (!ok) {
+      throw new AppError('Certificate not found or already revoked.', 404);
+    }
+    res.json({ ok: true });
   })
 );
 

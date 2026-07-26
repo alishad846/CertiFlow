@@ -188,17 +188,101 @@ export async function getVerification(publicId: string): Promise<VerificationRes
   };
 }
 
-/** Absolute path of the current version's gated PDF (for streaming downloads). */
-export async function getCurrentVersionPdfPath(certificateId: string): Promise<string | null> {
-  const result = await pool.query<{ pdf_path: string }>(
-    `SELECT v.pdf_path
+/** Current version's gated PDF path + certificate status (download guards on status). */
+export async function getCurrentVersionPdfPath(
+  certificateId: string
+): Promise<{ pdfPath: string; status: string } | null> {
+  const result = await pool.query<{ pdf_path: string; status: string }>(
+    `SELECT v.pdf_path, c.status
      FROM certificates c
      INNER JOIN certificate_versions v
        ON v.certificate_id = c.id AND v.version_no = c.current_version
      WHERE c.id = $1`,
     [certificateId]
   );
-  return result.rows[0]?.pdf_path ?? null;
+  const row = result.rows[0];
+  return row ? { pdfPath: row.pdf_path, status: row.status } : null;
+}
+
+export type CertificateListItem = {
+  id: string;
+  publicId: string;
+  recipientName: string;
+  recipientEmail: string;
+  title: string | null;
+  status: string;
+  claimStatus: string | null;
+  issuedAt: string;
+  claimedAt: string | null;
+};
+
+/** Company-scoped list of issued certificates (cursor paginated by issued_at). */
+export async function listCompanyCertificates(
+  companyId: string,
+  opts: { limit?: number; before?: string | null } = {}
+): Promise<CertificateListItem[]> {
+  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const params: unknown[] = [companyId];
+  let cursorClause = '';
+  if (opts.before) {
+    params.push(opts.before);
+    cursorClause = `AND c.issued_at < $${params.length}`;
+  }
+  params.push(limit);
+
+  const result = await pool.query<{
+    id: string;
+    public_id: string;
+    recipient_name: string;
+    recipient_email: string;
+    title: string | null;
+    status: string;
+    claim_status: string | null;
+    issued_at: Date;
+    claimed_at: Date | null;
+  }>(
+    `SELECT c.id, c.public_id, c.recipient_name, c.recipient_email, c.title, c.status,
+            cl.status AS claim_status, c.issued_at, c.claimed_at
+     FROM certificates c
+     LEFT JOIN certificate_claims cl ON cl.certificate_id = c.id
+     WHERE c.company_id = $1 ${cursorClause}
+     ORDER BY c.issued_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    publicId: row.public_id,
+    recipientName: row.recipient_name,
+    recipientEmail: row.recipient_email,
+    title: row.title,
+    status: row.status,
+    claimStatus: row.claim_status,
+    issuedAt: row.issued_at.toISOString(),
+    claimedAt: row.claimed_at ? row.claimed_at.toISOString() : null
+  }));
+}
+
+/** Revoke a certificate (company-scoped). Verification page then shows REVOKED. */
+export async function revokeCertificate(
+  certificateId: string,
+  companyId: string,
+  reason: string | null,
+  userId: string | null
+): Promise<boolean> {
+  const result = await pool.query<{ id: string }>(
+    `UPDATE certificates
+     SET status = 'revoked', revoked_at = NOW(), revoked_reason = $3, updated_at = NOW()
+     WHERE id = $1 AND company_id = $2 AND status <> 'revoked'
+     RETURNING id`,
+    [certificateId, companyId, reason]
+  );
+  if (!result.rows[0]) {
+    return false;
+  }
+  await logCertificateEvent(certificateId, 'revoked', { detail: { by: userId, reason } });
+  return true;
 }
 
 export async function logCertificateEvent(

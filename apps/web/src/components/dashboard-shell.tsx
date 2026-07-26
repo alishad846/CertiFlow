@@ -15,6 +15,7 @@ import {
   Crown,
   Building2,
   Palette,
+  Award,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -158,6 +159,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </span>
                 </NavLink>
               ) : null}
+              {user?.role !== 'super_admin' && user?.permissions?.canViewReports !== false ? (
+                <NavLink href="/certificates" active={currentPath.startsWith('/certificates')}>
+                  <span className="flex items-center gap-2">
+                    <Award className="h-4 w-4" /> Certificates
+                  </span>
+                </NavLink>
+              ) : null}
               {(user?.role === 'super_admin' || user?.permissions?.canRequestUpi !== false) ? (
                 <NavLink href="/billing" active={currentPath.startsWith('/billing')}>
                   <span className="flex items-center gap-2">
@@ -183,6 +191,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <NavLink href="/discounts" active={currentPath.startsWith('/discounts')}>
                   <span className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4" /> Discounts
+                  </span>
+                </NavLink>
+              ) : null}
+              {user?.role === 'super_admin' ? (
+                <NavLink href="/certificates" active={currentPath.startsWith('/certificates')}>
+                  <span className="flex items-center gap-2">
+                    <Award className="h-4 w-4" /> Certificates
                   </span>
                 </NavLink>
               ) : null}
