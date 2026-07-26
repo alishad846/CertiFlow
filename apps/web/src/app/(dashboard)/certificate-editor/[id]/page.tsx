@@ -55,8 +55,8 @@ export default function CertificateEditorPage() {
 
   if (loading || !template) {
     return (
-      <Card className="border-white/80">
-        <div className="h-[60vh] animate-pulse rounded-[28px] bg-slate-200/70" />
+      <Card>
+        <div className="h-[60vh] animate-pulse rounded-[28px] bg-paper-dim" />
       </Card>
     );
   }

@@ -88,18 +88,18 @@ export default function CertificateEditorStartPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Certificate editor</p>
-        <h2 className="mt-3 text-4xl font-bold tracking-tight text-ink md:text-5xl">
+      <Card>
+        <p className="eyebrow">Certificate editor</p>
+        <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
           Upload a background image or PDF and place dynamic fields on it.
         </h2>
       </Card>
 
       {activeTemplate ? (
-        <Card className="border-white/80">
+        <Card>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-20 w-28 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              <div className="h-20 w-28 overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-paper/50">
                 <img
                   src={getTemplatePreviewSrc(activeTemplate)}
                   alt={activeTemplate.name}
@@ -107,9 +107,9 @@ export default function CertificateEditorStartPage() {
                 />
               </div>
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Current template</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-ink">{activeTemplate.name}</h3>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Current template</p>
+                <h3 className="mt-1 font-serif text-2xl text-ink">{activeTemplate.name}</h3>
+                <p className="mt-2 text-sm text-ink-soft">
                   {activeTemplate.imageWidth} x {activeTemplate.imageHeight}
                 </p>
               </div>
@@ -126,7 +126,7 @@ export default function CertificateEditorStartPage() {
         </Card>
       ) : null}
 
-      <Card className="border-white/80">
+      <Card>
         <form
           className="space-y-6"
           onSubmit={async (event) => {
@@ -158,12 +158,12 @@ export default function CertificateEditorStartPage() {
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Template name</label>
+              <label className="mb-2 block text-sm font-medium text-ink-soft">Template name</label>
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Main certificate template" />
             </div>
             {role === 'super_admin' ? (
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Company ID for super admin</label>
+                <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID for super admin</label>
                 <Input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="Only needed for super admin" />
               </div>
             ) : null}
@@ -179,11 +179,15 @@ export default function CertificateEditorStartPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button type="submit" disabled={loading} className="sm:min-w-[220px]">
               <ImagePlus className="mr-2 h-4 w-4" />
-              {loading ? 'Creating template...' : 'Open editor'}
+              {loading ? 'Creating template' : 'Open editor'}
             </Button>
           </div>
 
-          {message ? <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{message}</p> : null}
+          {message ? (
+            <p className="rounded-2xl border border-[color:var(--color-border)] bg-paper/50 px-4 py-3 text-sm text-ink-soft">
+              {message}
+            </p>
+          ) : null}
         </form>
       </Card>
     </div>

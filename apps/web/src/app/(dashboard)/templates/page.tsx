@@ -84,11 +84,11 @@ export default function TemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
+      <Card>
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">My Templates</p>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight text-ink md:text-5xl">Manage, duplicate, and reuse certificate designs.</h2>
+            <p className="eyebrow">My templates</p>
+            <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">Manage, duplicate, and reuse certificate designs.</h2>
           </div>
           <Button asChild>
             <Link href="/certificate-editor">
@@ -100,24 +100,26 @@ export default function TemplatesPage() {
       </Card>
 
       {role === 'super_admin' ? (
-        <Card className="border-white/80">
-          <label className="mb-2 block text-sm font-medium text-slate-700">Company ID</label>
+        <Card>
+          <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID</label>
           <Input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="Enter company ID to view templates" />
         </Card>
       ) : null}
 
-      {message ? <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{message}</p> : null}
+      {message ? (
+        <p className="rounded-2xl border border-[color:var(--color-border)] bg-paper/50 px-4 py-3 text-sm text-ink-soft">{message}</p>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {loading ? (
-          <Card className="border-white/80">
-            <div className="h-72 animate-pulse rounded-[24px] bg-slate-200/70" />
+          <Card>
+            <div className="h-72 animate-pulse rounded-[24px] bg-paper-dim" />
           </Card>
         ) : templates.length ? (
           templates.map((template) => (
-            <Card key={template.id} className="border-white/80 overflow-hidden">
+            <Card key={template.id} className="overflow-hidden">
               <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
-                <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 min-h-[220px]">
+                <div className="min-h-[220px] overflow-hidden rounded-[22px] border border-[color:var(--color-border)] bg-paper/50">
                   <img
                     src={getTemplatePreviewSrc(template)}
                     alt={template.name}
@@ -130,13 +132,18 @@ export default function TemplatesPage() {
                 <div className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Template</p>
-                      <h3 className="mt-1 text-2xl font-bold tracking-tight text-ink">{template.name}</h3>
-                      <p className="mt-2 text-sm text-slate-500">
+                      <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-ink-faint">Template</p>
+                      <h3 className="mt-1 font-serif text-2xl text-ink">{template.name}</h3>
+                      <p className="mt-2 text-sm text-ink-soft">
                         {template.imageWidth} x {template.imageHeight}
                       </p>
                     </div>
-                    {template.isActive ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Active</span> : null}
+                    {template.isActive ? (
+                      <span className="flex items-center gap-1.5 font-mono text-[0.62rem] font-medium uppercase tracking-[0.14em] text-[#3f6f4a]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#3f6f4a]" />
+                        Active
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -221,8 +228,8 @@ export default function TemplatesPage() {
             </Card>
           ))
         ) : (
-          <Card className="border-white/80">
-            <p className="text-sm text-slate-500">No templates found for this company.</p>
+          <Card>
+            <p className="text-sm text-ink-soft">No templates found for this company.</p>
           </Card>
         )}
       </div>
