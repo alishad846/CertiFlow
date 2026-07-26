@@ -29,7 +29,7 @@ const steps = [
 const features = [
   { icon: Lock, title: 'Your template, untouched', body: 'Only placeholders change. Fonts, seals, spacing and borders stay exactly as designed.' },
   { icon: Gauge, title: 'Delivery you can see', body: 'Sent, pending, failed, generated and credits used — all in one calm dashboard.' },
-  { icon: Layers, title: 'Batch by design', body: 'Queue-based sending keeps delivery controlled, resilient and kind to mail providers.' },
+  { icon: Layers, title: 'Batch by design', body: 'A queue keeps sending controlled, resilient and kind to mail providers.' },
   { icon: Coins, title: 'Buy credits, then send', body: 'Top up credits with UPI and spend one per certificate. No seats, no subscriptions to wrestle with.' },
   { icon: Send, title: 'Send in bulk', body: 'One upload becomes thousands of personalized certificates, delivered in controlled batches.' },
   { icon: Sparkles, title: 'Simple on purpose', body: 'No workflow builder, no noise. Log in, buy credits, upload, and send. That is the whole craft.' }
@@ -67,9 +67,6 @@ export default function HomePage() {
                   <Link href="#how">See how it works</Link>
                 </Button>
               </div>
-              <p className="mt-6 font-mono text-xs tracking-[0.18em] text-ink-faint">
-                NO CARD REQUIRED · CREDIT-BASED · BUILT FOR EDTECH &amp; HR
-              </p>
             </Reveal>
           </div>
 
@@ -102,7 +99,7 @@ export default function HomePage() {
           <p className="eyebrow">The flow</p>
           <h2 className="mt-4 font-serif text-5xl tracking-tight text-ink">Four steps, and it is done.</h2>
           <p className="mt-4 text-lg leading-8 text-ink-soft">
-            No manuals, no onboarding calls. The whole process reads like a well-set page.
+            No manuals, no onboarding calls. The whole process reads like a carefully set page.
           </p>
         </Reveal>
 
@@ -159,7 +156,7 @@ export default function HomePage() {
             <h2 className="mt-4 font-serif text-5xl tracking-tight text-paper-bright">Log in, buy credits, send thousands.</h2>
             <p className="mt-4 text-lg leading-8 text-mist">
               CertiFlow is made for organisations issuing certificates in volume. Top up credits, upload your list once,
-              and deliver personalized certificates in controlled, fully-tracked batches.
+              and deliver personalized certificates in controlled batches you can track from start to finish.
             </p>
           </Reveal>
 
@@ -186,7 +183,7 @@ export default function HomePage() {
           <p className="eyebrow">Pricing</p>
           <h2 className="mt-4 font-serif text-5xl tracking-tight text-ink">Credits, with strict control.</h2>
           <p className="mt-4 text-lg leading-8 text-ink-soft">
-            Sold in fixed plans. Super admins approve top-ups and manage discounts only within allowed rules.
+            Sold in fixed plans. Super admins approve credit purchases and manage discounts only within allowed rules.
           </p>
         </Reveal>
 
@@ -204,9 +201,7 @@ export default function HomePage() {
                   {plan.name}
                 </p>
                 {plan.recommended ? (
-                  <span className="rounded-full bg-bronze px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.2em] text-paper-bright">
-                    Popular
-                  </span>
+                  <span className="font-serif text-sm italic text-bronze-bright">Recommended</span>
                 ) : null}
               </div>
               <p className={plan.recommended ? 'mt-6 font-serif text-4xl text-paper-bright' : 'mt-6 font-serif text-4xl text-ink'}>

@@ -90,7 +90,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-3">
           <QuickLink href="/companies" icon={Building2} label="Companies" hint="Access & credits" />
-          <QuickLink href="/billing" icon={WalletCards} label="Billing" hint="Top-ups & approvals" />
+          <QuickLink href="/billing" icon={WalletCards} label="Billing" hint="Credit purchases and approvals" />
           <QuickLink href="/discounts" icon={BadgePercent} label="Discounts" hint="Rules & limits" />
         </div>
       </div>

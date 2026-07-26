@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
     }
 
     if (otp.length !== 6) {
-      setError('Please enter a valid 6-digit OTP code');
+      setError('Please enter a valid 6 digit OTP code');
       return;
     }
 
@@ -119,13 +119,13 @@ export default function ForgotPasswordPage() {
             <>
               <h1 className={styles.title}>Enter code</h1>
               <p className={styles.description}>
-                We sent a 6-digit verification code to <strong style={{ color: '#0f172a' }}>{email}</strong>. Check your inbox and enter it below.
+                We sent a 6 digit verification code to <strong style={{ color: '#0f172a' }}>{email}</strong>. Check your inbox and enter it below.
               </p>
 
               <form className={styles.form} onSubmit={handleResetPassword}>
                 <div className={styles.field}>
                   <label className={styles.label} htmlFor="reset-otp">
-                    6-Digit Verification Code (OTP)
+                    6 Digit Verification Code (OTP)
                   </label>
                   <input
                     id="reset-otp"
@@ -207,7 +207,7 @@ export default function ForgotPasswordPage() {
               </div>
               <h1 className={styles.title} style={{ fontSize: '1.85rem' }}>Password reset!</h1>
               <p className={styles.description} style={{ marginTop: '12px' }}>
-                Your password has been successfully reset. Redirecting you to the sign-in page...
+                Your password has been successfully reset. Redirecting you to the sign in page.
               </p>
             </div>
           )}
