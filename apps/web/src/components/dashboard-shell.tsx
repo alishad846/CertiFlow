@@ -81,14 +81,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#f5f9ff_0%,#ffffff_35%,#eef6ff_100%)] px-4 py-4 lg:px-6">
+      <div className="min-h-screen px-4 py-4 lg:px-6">
         <div className="mx-auto flex max-w-[1500px] gap-6">
-          <div className="hidden w-14 shrink-0 rounded-[30px] bg-slate-200/80 lg:block" />
-          <div className="space-y-6 animate-pulse">
-            <div className="h-32 rounded-[30px] bg-slate-200/80" />
+          <div className="hidden w-14 shrink-0 rounded-[30px] bg-paper-dim lg:block" />
+          <div className="flex-1 space-y-6 animate-pulse">
+            <div className="h-32 rounded-[30px] bg-paper-dim" />
             <div className="grid gap-6 xl:grid-cols-2">
-              <div className="h-[58vh] rounded-[30px] bg-slate-200/80" />
-              <div className="h-[58vh] rounded-[30px] bg-slate-200/80" />
+              <div className="h-[58vh] rounded-[30px] bg-paper-dim" />
+              <div className="h-[58vh] rounded-[30px] bg-paper-dim" />
             </div>
           </div>
         </div>
@@ -97,10 +97,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#f4f8ff_0%,#ffffff_36%,#eef5ff_100%)] text-ink">
+    <div className="min-h-screen text-ink">
       <div className="mx-auto flex min-h-screen max-w-[1500px] gap-6 px-4 py-4 lg:px-6">
         <aside
-          className={`group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-y-auto overflow-x-hidden rounded-[30px] border border-white/70 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur transition-all duration-300 ${
+          className={`group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-y-auto overflow-x-hidden rounded-[30px] border border-[color:var(--color-border)] bg-paper-bright/85 shadow-[0_24px_80px_-42px_rgba(11,27,58,0.5)] backdrop-blur transition-all duration-300 ${
             sidebarExpanded ? 'w-[280px] p-5' : 'w-14 p-2'
           }`}
         >
@@ -108,19 +108,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             type="button"
             aria-label={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
             onClick={() => setSidebarExpanded((current) => !current)}
-            className="absolute right-2 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.12)] transition hover:bg-slate-50"
+            className="absolute right-2 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-paper-bright text-ink-soft shadow-[0_12px_30px_-14px_rgba(11,27,58,0.5)] transition hover:text-bronze-deep"
           >
             {sidebarExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
 
           <div className={`transition-all duration-300 ${sidebarExpanded ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
-            <div className="flex items-center gap-3 rounded-[24px] bg-[linear-gradient(180deg,rgba(15,23,42,0.04),rgba(15,23,42,0.015))] p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-ink text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+            <div className="flex items-center gap-3 rounded-[24px] border border-[color:var(--color-border)] bg-paper/60 p-4">
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-ink text-paper-bright shadow-[0_16px_40px_-20px_rgba(11,27,58,0.7)]">
+                <span className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-bronze/40" />
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-500">CertiFlow</p>
-                <h1 className="text-xl font-bold tracking-tight">Bulk Delivery SaaS</h1>
+                <p className="font-mono text-[0.62rem] uppercase tracking-[0.28em] text-bronze-deep">CertiFlow</p>
+                <h1 className="font-serif text-xl tracking-tight text-ink">Bulk Delivery</h1>
               </div>
             </div>
 
@@ -191,9 +192,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Card className="mt-8 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-500">Signed in as</p>
-                  <p className="mt-2 text-lg font-semibold">{user?.name}</p>
-                  <p className="text-sm text-slate-500">{user?.email}</p>
+                  <p className="font-mono text-[0.6rem] uppercase tracking-[0.24em] text-ink-faint">Signed in as</p>
+                  <p className="mt-2 font-serif text-lg text-ink">{user?.name}</p>
+                  <p className="text-sm text-ink-soft">{user?.email}</p>
                 </div>
                 <Badge tone={user?.role === 'super_admin' ? 'blue' : 'green'}>
                   {user?.role === 'super_admin' ? 'Super Admin' : 'Company Admin'}
@@ -202,12 +203,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Card>
 
             <div className="mt-6 space-y-3">
-              <div className="rounded-[24px] bg-[linear-gradient(135deg,rgba(42,141,240,0.10),rgba(84,171,255,0.03))] p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-accent-700">
+              <div className="rounded-[24px] border border-bronze/20 bg-[linear-gradient(135deg,rgba(180,138,90,0.12),rgba(161,178,214,0.08))] p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-bronze-deep">
                   {user?.role === 'super_admin' ? <Crown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                   {user?.role === 'super_admin' ? 'Super admin control center' : 'Batch-first workflow'}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="mt-2 text-sm leading-6 text-ink-soft">
                   {user?.role === 'super_admin'
                     ? 'Manage companies, permissions, billing, approvals, and discounts from one place.'
                     : 'Upload Excel once, use a saved certificate template, and send documents in controlled batches.'}
@@ -239,20 +240,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="min-w-0 flex-1 space-y-6">
-          <div className="rounded-[30px] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur">
+          <div className="paper rounded-[30px] p-8">
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
               <div className="max-w-3xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Welcome back</p>
-                <h2 className="mt-2 text-4xl font-bold tracking-tight text-ink md:text-5xl">
-                  Generate and send documents in one clean flow.
+                <p className="eyebrow">Welcome back</p>
+                <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
+                  Generate and send, in one quiet flow.
                 </h2>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                  The dashboard keeps generation, PDF conversion, and delivery status in one simple place for beginners.
+                <p className="mt-3 max-w-2xl text-base leading-7 text-ink-soft">
+                  Generation, PDF conversion, and delivery status — kept in one calm place.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge tone="blue">Credits-powered delivery</Badge>
-                <Badge tone="green">Batch size 50</Badge>
+                <Badge tone="amber">Credits-powered</Badge>
+                <Badge tone="blue">Batch size 50</Badge>
               </div>
             </div>
           </div>

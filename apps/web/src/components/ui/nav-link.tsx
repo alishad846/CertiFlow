@@ -14,10 +14,10 @@ export function NavLink({
     <Link
       href={href}
       className={cn(
-        'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200',
+        'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium tracking-wide transition-all duration-200',
         active
-          ? 'bg-ink text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)]'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-ink'
+          ? 'bg-ink text-paper-bright shadow-[0_16px_40px_-22px_rgba(11,27,58,0.8)]'
+          : 'text-ink-soft hover:bg-paper-dim hover:text-ink'
       )}
     >
       {children}

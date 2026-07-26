@@ -279,7 +279,7 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
             <li><strong>Sender email</strong> should be the company mailbox you want emails to come from.</li>
             <li><strong>SMTP host/port/user/password</strong> are the credentials for that mailbox.</li>
           </ul>
-          <p>After saving, create a test batch and send it. The recipient should see your company email, not <strong>alishad846@gmail.com</strong>.</p>
+          <p>After saving, create a test batch and send it. The recipient should see <strong>your company email</strong> as the sender, not the platform&rsquo;s default sending address.</p>
         </div>
       </Card>
 

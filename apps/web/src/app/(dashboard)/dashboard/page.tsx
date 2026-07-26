@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Building2, FileUp, MailCheck, ShieldCheck, WalletCards } from 'lucide-react';
+import { ArrowUpRight, Building2, FileUp, ScrollText, WalletCards, Palette, BadgePercent } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { StatCard } from '@/components/ui/stat-card';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CompanyAnalytics } from '@/components/dashboard/company-analytics';
+import { AdminAnalytics } from '@/components/dashboard/admin-analytics';
 import type { DashboardStats, CompanySummary, UserRole } from '@certiflow/shared';
 
 type MeResponse = {
@@ -17,14 +17,20 @@ type MeResponse = {
     role: UserRole;
     email: string;
     name: string;
-    permissions?: {
-      canCreateBatches: boolean;
-      canRequestUpi: boolean;
-      canViewReports: boolean;
-    };
-    companyStatus?: 'active' | 'blocked' | null;
   };
 };
+
+function StatTile({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  return (
+    <div className="paper rounded-[22px] p-6">
+      <p className="font-mono text-[0.6rem] uppercase tracking-[0.22em] text-ink-faint">{label}</p>
+      <p className="mt-3 font-serif text-4xl text-ink">
+        {typeof value === 'number' ? value.toLocaleString('en-US') : value}
+      </p>
+      {hint ? <p className="mt-1 text-xs text-ink-soft">{hint}</p> : null}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<MeResponse['user'] | null>(null);
@@ -50,189 +56,90 @@ export default function DashboardPage() {
     };
 
     load()
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load dashboard'))
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
-    return <div className="rounded-[30px] border border-white/70 bg-white/90 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.06)]">Loading dashboard...</div>;
+    return <div className="paper rounded-[28px] p-8 font-serif text-lg text-ink">Loading dashboard…</div>;
   }
 
   if (error || !stats || !user) {
     return (
       <Card>
-        <p className="text-lg font-semibold">Unable to load dashboard</p>
-        <p className="mt-2 text-sm text-slate-500">{error || 'No dashboard data available yet.'}</p>
+        <p className="font-serif text-xl text-ink">Unable to load dashboard</p>
+        <p className="mt-2 text-sm text-ink-soft">{error || 'No dashboard data available yet.'}</p>
       </Card>
     );
   }
 
   const isSuperAdmin = user.role === 'super_admin';
-  const blockedCompanies = companies.filter((company) => company.status === 'blocked').length;
-  const activeCompanies = companies.filter((company) => company.status === 'active').length;
+
+  if (isSuperAdmin) {
+    const active = companies.filter((c) => c.status === 'active').length;
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Companies" value={companies.length} hint={`${active} active`} />
+          <StatTile label="Certificates downloaded" value={stats.totalGeneratedDocuments} hint="Across the platform" />
+          <StatTile label="Credits in circulation" value={stats.remainingCredits} hint="All companies combined" />
+          <StatTile label="Emails delivered" value={stats.emailsSent} hint={`${stats.failedEmails} retried`} />
+        </div>
+
+        <AdminAnalytics />
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <QuickLink href="/companies" icon={Building2} label="Companies" hint="Access & credits" />
+          <QuickLink href="/billing" icon={WalletCards} label="Billing" hint="Top-ups & approvals" />
+          <QuickLink href="/discounts" icon={BadgePercent} label="Discounts" hint="Rules & limits" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-                {isSuperAdmin ? 'Control tower' : 'Operations workspace'}
-              </p>
-              <Badge tone={isSuperAdmin ? 'blue' : 'green'}>{isSuperAdmin ? 'Super admin' : 'Company admin'}</Badge>
-            </div>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-ink md:text-4xl">
-              {isSuperAdmin
-                ? 'Manage companies, billing, and access from one clean place.'
-                : 'Upload documents fast and keep delivery clear.'}
-            </h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-              {isSuperAdmin
-                ? 'Use the dashboard for the platform signals you need most. Detailed company work stays on dedicated pages.'
-                : 'Use the dashboard for quick actions and status at a glance. Uploads, templates, and logs live on their own pages.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge tone={isSuperAdmin ? 'amber' : 'blue'}>{isSuperAdmin ? 'Full platform control' : 'Batch size 50'}</Badge>
-            <Badge tone="green">Retry enabled</Badge>
-          </div>
-        </div>
-      </Card>
-
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label={isSuperAdmin ? 'Generated documents across platform' : 'Total generated documents'}
-          value={stats.totalGeneratedDocuments}
-          hint={isSuperAdmin ? 'All companies combined' : 'Documents created from uploads'}
-        />
-        <StatCard
-          label={isSuperAdmin ? 'Remaining credits across companies' : 'Remaining credits'}
-          value={stats.remainingCredits}
-          hint={isSuperAdmin ? 'Managed at company level' : '1 credit per recipient'}
-        />
-        <StatCard label="Emails sent" value={stats.emailsSent} hint="Successfully delivered PDFs" />
-        <StatCard label="Failed emails" value={stats.failedEmails} hint="Automatically retried first" />
+        <StatTile label="Certificates issued" value={stats.totalGeneratedDocuments} hint="Generated from your uploads" />
+        <StatTile label="Credits remaining" value={stats.remainingCredits} hint="1 credit per certificate" />
+        <StatTile label="Emails sent" value={stats.emailsSent} hint="Delivered certificates" />
+        <StatTile label="Pending" value={stats.pendingEmails} hint="In the send queue" />
       </div>
 
-      {isSuperAdmin ? (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                <Building2 className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Companies</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">{companies.length}</h3>
-              </div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              {activeCompanies} active, {blockedCompanies} blocked.
-            </p>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/companies">
-                Open company control
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
+      <CompanyAnalytics />
 
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(42,141,240,0.14),rgba(42,141,240,0.05))] text-accent-700">
-                <WalletCards className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Billing</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">Top-ups & approvals</h3>
-              </div>
-            </div>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/billing">
-                Review billing queue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
-
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.05))] text-emerald-700">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Security</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">Access and audit</h3>
-              </div>
-            </div>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/discounts">
-                Manage discounts
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(42,141,240,0.14),rgba(42,141,240,0.05))] text-accent-700">
-                <FileUp className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Uploads</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">Start a batch</h3>
-              </div>
-            </div>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/uploads">
-                Start a batch
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
-
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(14,165,233,0.14),rgba(14,165,233,0.05))] text-sky-700">
-                <MailCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Logs</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">Review status</h3>
-              </div>
-            </div>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/logs">
-                Open logs
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
-
-          <Card className="border-white/80">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.05))] text-emerald-700">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Templates</p>
-                <h3 className="text-2xl font-bold tracking-tight text-ink">Edit designs</h3>
-              </div>
-            </div>
-            <Button asChild variant="secondary" className="mt-5 w-full">
-              <Link href="/templates">
-                Open templates
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </Card>
-        </div>
-      )}
+      <div className="grid gap-4 md:grid-cols-3">
+        <QuickLink href="/uploads" icon={FileUp} label="New batch" hint="Upload & send" />
+        <QuickLink href="/certificate-editor" icon={Palette} label="Editor" hint="Design a template" />
+        <QuickLink href="/logs" icon={ScrollText} label="Delivery logs" hint="Track every email" />
+      </div>
     </div>
+  );
+}
+
+function QuickLink({
+  href,
+  icon: Icon,
+  label,
+  hint
+}: {
+  href: string;
+  icon: typeof Building2;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <Link href={href} className="paper group flex items-center justify-between rounded-[22px] p-6 transition-transform duration-300 hover:-translate-y-0.5">
+      <div className="flex items-center gap-4">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-ink text-paper-bright">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="font-serif text-lg text-ink">{label}</p>
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-ink-faint">{hint}</p>
+        </div>
+      </div>
+      <ArrowUpRight className="h-5 w-5 text-ink-faint transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-bronze-deep" />
+    </Link>
   );
 }
