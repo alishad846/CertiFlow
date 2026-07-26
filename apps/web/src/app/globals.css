@@ -71,6 +71,43 @@
   :root {
     color-scheme: light;
     --radius: 0.85rem;
+
+    /* Bklit chart theming — bare var names read directly by chart internals
+       (distinct from Tailwind's --color-* prefixed tokens above). */
+    --chart-background: var(--color-paper-bright);
+    --chart-foreground: var(--color-ink);
+    --chart-foreground-muted: var(--color-ink-faint);
+    --chart-label: var(--color-ink-soft);
+
+    --chart-line-primary: var(--color-bronze);
+    --chart-line-secondary: var(--color-royal);
+    --chart-crosshair: var(--color-bronze-deep);
+    --chart-grid: var(--color-border);
+
+    --chart-indicator-color: var(--color-ink);
+    --chart-indicator-secondary-color: var(--color-ink-faint);
+
+    --chart-marker-background: var(--color-paper-bright);
+    --chart-marker-border: var(--color-border);
+    --chart-marker-foreground: var(--color-ink);
+    --chart-marker-badge-background: var(--color-ink);
+    --chart-marker-badge-foreground: var(--color-paper-bright);
+
+    --chart-segment-background: var(--color-paper-dim);
+    --chart-segment-line: var(--color-border);
+
+    --chart-tooltip-background: var(--color-paper-bright);
+    --chart-brush-border: var(--color-bronze);
+
+    --chart-1: var(--color-bronze);
+    --chart-2: var(--color-royal);
+    --chart-3: var(--color-ink);
+    --chart-4: var(--color-mist);
+    --chart-5: #8a7b52;
+
+    --border: var(--color-border);
+    --foreground: var(--color-ink);
+    --muted-foreground: var(--color-ink-soft);
   }
 
   * {
@@ -146,6 +183,25 @@
   .rule-bronze {
     background-image: linear-gradient(90deg, var(--color-bronze), transparent);
     height: 1px;
+  }
+
+  /* Slim theme-colored scrollbar for scrollable panels (sidebar, etc.) */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-paper-deep) transparent;
+  }
+  .scroll-slim::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    background-color: var(--color-paper-deep);
+    border-radius: 999px;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-bronze);
   }
 }
 

@@ -21,7 +21,6 @@ import {
 import { apiFetch } from '@/lib/api';
 import { Button } from './ui/button';
 import { NavLink } from './ui/nav-link';
-import { Badge } from './ui/badge';
 import { Card } from './ui/card';
 
 type MeResponse = {
@@ -100,7 +99,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen text-ink">
       <div className="mx-auto flex min-h-screen max-w-[1500px] gap-6 px-4 py-4 lg:px-6">
         <aside
-          className={`group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-y-auto overflow-x-hidden rounded-[30px] border border-[color:var(--color-border)] bg-paper-bright/85 shadow-[0_24px_80px_-42px_rgba(11,27,58,0.5)] backdrop-blur transition-all duration-300 ${
+          className={`scroll-slim group sticky top-4 h-[calc(100vh-2rem)] shrink-0 overflow-y-auto overflow-x-hidden rounded-[30px] border border-[color:var(--color-border)] bg-paper-bright/85 shadow-[0_24px_80px_-42px_rgba(11,27,58,0.5)] backdrop-blur transition-all duration-300 ${
             sidebarExpanded ? 'w-[280px] p-5' : 'w-14 p-2'
           }`}
         >
@@ -190,36 +189,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <Card className="mt-8 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[0.6rem] uppercase tracking-[0.24em] text-ink-faint">Signed in as</p>
-                  <p className="mt-2 font-serif text-lg text-ink">{user?.name}</p>
-                  <p className="text-sm text-ink-soft">{user?.email}</p>
-                </div>
-                <Badge tone={user?.role === 'super_admin' ? 'blue' : 'green'}>
-                  {user?.role === 'super_admin' ? 'Super Admin' : 'Company Admin'}
-                </Badge>
-              </div>
+              <p className="font-mono text-[0.6rem] uppercase tracking-[0.24em] text-ink-faint">Signed in as</p>
+              <p className="mt-2 font-serif text-lg text-ink">{user?.name}</p>
             </Card>
 
             <div className="mt-6 space-y-3">
               <div className="rounded-[24px] border border-bronze/20 bg-[linear-gradient(135deg,rgba(180,138,90,0.12),rgba(161,178,214,0.08))] p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-bronze-deep">
                   {user?.role === 'super_admin' ? <Crown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                  {user?.role === 'super_admin' ? 'Super admin control center' : 'Batch-first workflow'}
+                  {user?.role === 'super_admin' ? 'Super admin control center' : 'A workflow built around batches'}
                 </div>
                 <p className="mt-2 text-sm leading-6 text-ink-soft">
                   {user?.role === 'super_admin'
                     ? 'Manage companies, permissions, billing, approvals, and discounts from one place.'
                     : 'Upload Excel once, use a saved certificate template, and send documents in controlled batches.'}
                 </p>
-                {user?.role !== 'super_admin' && user?.permissions ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {user.permissions.canCreateBatches ? <Badge tone="green">Uploads on</Badge> : <Badge tone="red">Uploads off</Badge>}
-                    {user.permissions.canRequestUpi ? <Badge tone="blue">Billing on</Badge> : <Badge tone="red">Billing off</Badge>}
-                    {user.permissions.canViewReports ? <Badge tone="amber">Reports on</Badge> : <Badge tone="red">Reports off</Badge>}
-                  </div>
-                ) : null}
               </div>
               <Button
                 className="w-full justify-between"
@@ -241,21 +225,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <main className="min-w-0 flex-1 space-y-6">
           <div className="paper rounded-[30px] p-8">
-            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div className="max-w-3xl">
-                <p className="eyebrow">Welcome back</p>
-                <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
-                  Generate and send, in one quiet flow.
-                </h2>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-ink-soft">
-                  Generation, PDF conversion, and delivery status — kept in one calm place.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge tone="amber">Credits-powered</Badge>
-                <Badge tone="blue">Batch size 50</Badge>
-              </div>
-            </div>
+            <p className="eyebrow">Welcome back</p>
+            <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
+              Generate and send, in one quiet flow.
+            </h2>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-ink-soft">
+              Generation, PDF conversion, and delivery status — kept in one calm place.
+            </p>
           </div>
 
           {children}

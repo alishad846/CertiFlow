@@ -7,7 +7,23 @@
  * series from the API instead (see session-resume memory for the plan).
  */
 
-const MONTHS = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+// Bklit's time-series charts parse `date` with `new Date(...)`, so it must be a
+// real parseable date — not a bare month label like "Aug". The chart formats
+// these into short month labels ("Aug", "Sep", …) for the axis itself.
+const MONTHS = [
+  '2025-08-01',
+  '2025-09-01',
+  '2025-10-01',
+  '2025-11-01',
+  '2025-12-01',
+  '2026-01-01',
+  '2026-02-01',
+  '2026-03-01',
+  '2026-04-01',
+  '2026-05-01',
+  '2026-06-01',
+  '2026-07-01'
+];
 
 export type CertificateActivityPoint = { date: string; issued: number; credits: number };
 export type RevenuePoint = { date: string; revenue: number };

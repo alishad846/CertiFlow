@@ -23,9 +23,7 @@ export function CompanyAnalytics() {
             <p className="eyebrow">Issued vs credits used</p>
             <h3 className="mt-2 font-serif text-2xl text-ink">Certificate activity</h3>
           </div>
-          <span className="rounded-full border border-[color:var(--color-border)] px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
-            Sample data
-          </span>
+          <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">Sample data</span>
         </div>
         <div className="mt-4">
           <ComposedChart data={composedData} xDataKey="date" barGap={0} maxBarSize={22} aspectRatio="2.4 / 1">

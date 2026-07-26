@@ -52,9 +52,7 @@ export function AdminAnalytics() {
                 </span>
               </h3>
             </div>
-            <span className="rounded-full border border-[color:var(--color-border)] px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
-              Sample data
-            </span>
+            <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">Sample data</span>
           </div>
           <div className="mt-4">
             <AreaChart data={revData} xDataKey="date" aspectRatio="2.6 / 1">
@@ -102,7 +100,7 @@ export function AdminAnalytics() {
           <p className="eyebrow">Credits by company</p>
           <h3 className="mt-2 font-serif text-2xl text-ink">Where credits sit</h3>
           <div className="mt-4 flex flex-col items-center gap-6 sm:flex-row">
-            <RingChart data={ringData} size={200} strokeWidth={13} ringGap={6}>
+            <RingChart data={ringData} size={272} strokeWidth={17} ringGap={7}>
               {ringData.map((item, index) => (
                 <Ring key={item.label} index={index} />
               ))}
@@ -129,9 +127,7 @@ export function AdminAnalytics() {
               <p className="eyebrow">Active companies</p>
               <h3 className="mt-2 font-serif text-2xl text-ink">Plans &amp; renewals</h3>
             </div>
-            <span className="rounded-full border border-[color:var(--color-border)] px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
-              Sample data
-            </span>
+            <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">Sample data</span>
           </div>
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[420px] text-left">
@@ -149,10 +145,8 @@ export function AdminAnalytics() {
                     <td className="py-3">
                       <span className="font-serif text-base text-ink">{c.companyName}</span>
                     </td>
-                    <td className="py-3">
-                      <span className="rounded-full bg-bronze/12 px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-bronze-deep">
-                        {c.plan}
-                      </span>
+                    <td className="py-3 font-mono text-[0.65rem] uppercase tracking-[0.1em] text-bronze-deep">
+                      {c.plan}
                     </td>
                     <td className="py-3 font-mono text-sm text-ink-soft">{c.renews}</td>
                     <td className="py-3 text-right font-mono text-sm text-ink">
