@@ -18,7 +18,8 @@ import { renderCertificatePdf } from '../services/certificate-render';
 import { ensureDir, safeSegment } from '../services/fs';
 import { emailQueue } from '../services/queue';
 import { renderTemplateString } from '../services/template-placeholders';
-import { issueCertificate } from '../services/certificates';
+import { issueCertificate, allocateUniquePublicId } from '../services/certificates';
+import { finalizeCertificatePdf } from '../services/certificate-finalize';
 
 function buildClaimEmailHtml(message: string, context: Record<string, unknown>, claimUrl: string) {
   const name = String(context?.name ?? '').trim() || 'there';
@@ -270,9 +271,15 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           primaryDocxPath = rendered.pngPath;
           primaryPdfPath = rendered.pdfPath;
 
-          // Certificate flow: store the PDF in the gated store, create the
+          // Certificate flow: reserve the public id, stamp a verification QR and
+          // digitally sign the PDF, then store it in the gated store, create the
           // verifiable certificate + claim records, and email a claim link
           // instead of attaching the PDF.
+          const publicId = await allocateUniquePublicId();
+          const finalized = await finalizeCertificatePdf(rendered.pdfPath, {
+            verifyUrl: `${appBase}/verify/${publicId}`,
+            publicId
+          });
           const issued = await issueCertificate({
             companyId: batch.company_id,
             batchId: batch.id,
@@ -282,7 +289,9 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             recipientEmail: document.recipient_email,
             title: certificateTemplate.name ?? batch.name,
             sourcePdfPath: rendered.pdfPath,
-            dataSnapshot: certificateContext as Record<string, unknown>
+            dataSnapshot: certificateContext as Record<string, unknown>,
+            publicId,
+            signed: finalized.signed
           });
           claimUrl = `${appBase}/claim/${issued.claimToken}`;
         } else {

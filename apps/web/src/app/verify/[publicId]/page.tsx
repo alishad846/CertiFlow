@@ -16,6 +16,7 @@ type Verification = {
   expiresAt?: string | null;
   revokedReason?: string | null;
   currentVersion?: number;
+  signed?: boolean;
 };
 
 const STATUS_META: Record<string, { label: string; icon: typeof BadgeCheck; className: string }> = {
@@ -96,7 +97,13 @@ export default function VerifyPage() {
               <Field label="Expires" value={data.expiresAt ? fmt(data.expiresAt) : 'No expiry'} />
             </div>
 
-            <p className="mt-6 text-xs leading-6 text-ink-faint">
+            {data.signed ? (
+              <p className="mt-6 flex items-center gap-2 text-sm text-[#3f6f4a]">
+                <BadgeCheck className="h-4 w-4" /> Digitally signed &amp; tamper-evident PDF
+              </p>
+            ) : null}
+
+            <p className="mt-4 text-xs leading-6 text-ink-faint">
               This page is the authoritative record for this certificate. Details shown here are served directly from
               CertiFlow and cannot be altered by editing a downloaded copy.
             </p>

@@ -22,7 +22,23 @@ export type IssueCertificateInput = {
   sourcePdfPath: string;
   dataSnapshot?: Record<string, unknown>;
   expiresAt?: Date | null;
+  /** Pre-allocated public id (so the QR can be stamped before issuing). */
+  publicId?: string;
+  /** Whether the source PDF is digitally signed. */
+  signed?: boolean;
 };
+
+/** Reserve a collision-free public credential id (used before rendering the QR). */
+export async function allocateUniquePublicId(): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const candidate = generatePublicCertificateId();
+    const existing = await pool.query('SELECT 1 FROM certificates WHERE public_id = $1', [candidate]);
+    if (existing.rowCount === 0) {
+      return candidate;
+    }
+  }
+  throw new Error('Failed to allocate a unique certificate id');
+}
 
 export type IssuedCertificate = {
   id: string;
@@ -48,7 +64,7 @@ export async function issueCertificate(input: IssueCertificateInput): Promise<Is
   const claimTtlMs = env.CLAIM_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const publicId = generatePublicCertificateId();
+    const publicId = input.publicId ?? generatePublicCertificateId();
     const claimToken = generateClaimToken();
     const claimTokenHash = hashSecret(claimToken);
 
@@ -81,9 +97,9 @@ export async function issueCertificate(input: IssueCertificateInput): Promise<Is
 
         await client.query(
           `INSERT INTO certificate_versions
-             (certificate_id, version_no, pdf_path, pdf_sha256, data_snapshot)
-           VALUES ($1, 1, $2, $3, $4::jsonb)`,
-          [id, storedPath, sha256, JSON.stringify(input.dataSnapshot ?? {})]
+             (certificate_id, version_no, pdf_path, pdf_sha256, signed, data_snapshot)
+           VALUES ($1, 1, $2, $3, $4, $5::jsonb)`,
+          [id, storedPath, sha256, input.signed ?? false, JSON.stringify(input.dataSnapshot ?? {})]
         );
 
         await client.query(
@@ -138,6 +154,7 @@ export type VerificationResult = {
   expiresAt?: string | null;
   revokedReason?: string | null;
   currentVersion?: number;
+  signed?: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -154,10 +171,13 @@ export async function getVerification(publicId: string): Promise<VerificationRes
     expires_at: Date | null;
     revoked_reason: string | null;
     current_version: number;
+    signed: boolean | null;
     metadata: Record<string, unknown>;
   }>(
     `SELECT c.id, c.public_id, c.recipient_name, c.title, co.name AS company_name, c.status,
-            c.issued_at, c.expires_at, c.revoked_reason, c.current_version, c.metadata
+            c.issued_at, c.expires_at, c.revoked_reason, c.current_version, c.metadata,
+            (SELECT v.signed FROM certificate_versions v
+              WHERE v.certificate_id = c.id AND v.version_no = c.current_version) AS signed
      FROM certificates c
      INNER JOIN companies co ON co.id = c.company_id
      WHERE c.public_id = $1`,
@@ -184,6 +204,7 @@ export async function getVerification(publicId: string): Promise<VerificationRes
     expiresAt: row.expires_at ? row.expires_at.toISOString() : null,
     revokedReason: row.revoked_reason,
     currentVersion: row.current_version,
+    signed: Boolean(row.signed),
     metadata: row.metadata
   };
 }

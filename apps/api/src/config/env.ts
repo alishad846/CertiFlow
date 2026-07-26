@@ -71,7 +71,14 @@ const envSchema = z.object({
   BATCH_WORKER_CONCURRENCY: z.coerce.number().default(1),
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().default(3),
   EMAIL_RATE_MAX: z.coerce.number().default(20),
-  EMAIL_RATE_DURATION_MS: z.coerce.number().default(1000)
+  EMAIL_RATE_DURATION_MS: z.coerce.number().default(1000),
+
+  // Tamper-proofing: stamp a QR (→ verify page) and digitally sign each PDF.
+  // In production, point CERT_SIGNING_P12_PATH at a real (CA-issued) code-signing
+  // cert. If unset, a self-signed dev P12 is auto-generated under CERT_STORE_DIR.
+  CERT_SIGNING_ENABLED: z.coerce.boolean().default(true),
+  CERT_SIGNING_P12_PATH: z.string().optional().default(''),
+  CERT_SIGNING_P12_PASSPHRASE: z.string().default('certiflow')
 });
 
 export const env = envSchema.parse(process.env);
