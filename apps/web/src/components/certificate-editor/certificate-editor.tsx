@@ -6,6 +6,7 @@ import React, {
     useRef,
     useState
 } from "react";
+import { createWorker, PSM } from 'tesseract.js';
 import {
   CheckCircle2,
   Plus,
@@ -56,6 +57,7 @@ const defaultFieldStyle: CertificateFieldConfig = {
 type EditorFieldConfig = CertificateFieldConfig & {
   id: string;
   height?: number;
+  isOcrText?: boolean;
 };
 
 type PreviewPage = {
@@ -209,6 +211,8 @@ const [snapEnabled, setSnapEnabled] =
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  const [extractingText, setExtractingText] = useState(false);
+const [extractMessage, setExtractMessage] = useState('');
   const [dragState, setDragState] = useState<{
     field: string;
     pageNumber: number;
@@ -1033,6 +1037,199 @@ setFields((current) => [...current, nextField]);
 
 setFields((current) => [...current, nextField]);
   };
+const extractExistingTextFromTemplate = async () => {
+  const page =
+    pagesToRender.find(
+      (item) => item.pageNumber === activePage
+    ) ?? pagesToRender[0];
+
+  if (!page) {
+    setExtractMessage('No certificate page is available.');
+    return;
+  }
+
+  setExtractingText(true);
+  setExtractMessage('Scanning template text...');
+
+  let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+
+  try {
+    worker = await createWorker('eng');
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK
+    });
+
+    const result = await worker.recognize(
+      page.src,
+      {},
+      {
+        blocks: true,
+        text: true
+      }
+    );
+
+    const sourceImage = new Image();
+
+    await new Promise<void>((resolve, reject) => {
+      sourceImage.onload = () => resolve();
+      sourceImage.onerror = () =>
+        reject(
+          new Error(
+            'Could not load certificate image for OCR scaling.'
+          )
+        );
+      sourceImage.src = page.src;
+    });
+
+    const scaleX = page.width / sourceImage.naturalWidth;
+    const scaleY = page.height / sourceImage.naturalHeight;
+
+    type OcrItem = {
+      text?: string;
+      confidence?: number;
+      bbox?: {
+        x0: number;
+        y0: number;
+        x1: number;
+        y1: number;
+      };
+      words?: OcrItem[];
+    };
+
+    type OcrBlock = {
+      lines?: OcrItem[];
+      paragraphs?: Array<{
+        lines?: OcrItem[];
+      }>;
+    };
+
+    const ocrData = result.data as unknown as {
+      text?: string;
+      lines?: OcrItem[];
+      words?: OcrItem[];
+      blocks?: OcrBlock[];
+    };
+
+    const lineItems = (ocrData.blocks ?? []).flatMap(
+      (block) => [
+        ...(block.lines ?? []),
+        ...(block.paragraphs ?? []).flatMap(
+          (paragraph) => paragraph.lines ?? []
+        )
+      ]
+    );
+
+    const candidateItems = [
+      ...(ocrData.lines ?? []),
+      ...lineItems
+    ];
+
+    const detectedItems = (
+      candidateItems.length
+        ? candidateItems
+        : ocrData.words ?? []
+    ).filter((item) => {
+      const text = item.text?.trim();
+
+      if (!text || text.length < 3 || !item.bbox) {
+        return false;
+      }
+
+      const upper = text.toUpperCase();
+
+      const ignoredWords = [
+        'JOHNS HOPKINS',
+        'JOHNS HOPKINS UNIVERSITY',
+        'COURSE CERTIFICATE',
+        'COURSERA'
+      ];
+
+      if (
+        ignoredWords.some((word) => upper.includes(word)) ||
+        upper.includes('UNIVERSITY')
+      ) {
+        return false;
+      }
+
+      return (item.confidence ?? 100) > 50;
+    });
+
+    if (!detectedItems.length) {
+      setExtractMessage(
+        ocrData.text?.trim()
+          ? `Text was found, but editable positions could not be detected.`
+          : 'No text detected. Try a clearer certificate image.'
+      );
+      return;
+    }
+
+    const timestamp = Date.now();
+
+    const extractedFields: EditorFieldConfig[] =
+      detectedItems.map((item, index) => {
+        const text = item.text?.trim() ?? '';
+        const box = item.bbox!;
+
+        const width = Math.max(
+          80,
+          (box.x1 - box.x0) * scaleX
+        );
+
+        const height = Math.max(
+          24,
+          (box.y1 - box.y0) * scaleY
+        );
+
+        return {
+          ...defaultFieldStyle,
+          id: createEditorFieldId(
+            'ocr-text',
+            fields.length + index
+          ),
+          field: `ocr_text_${timestamp}_${index}`,
+          isOcrText: true,
+          pageNumber: page.pageNumber,
+          text,
+          x: Math.max(0, box.x0 * scaleX),
+          y: Math.max(0, box.y0 * scaleY),
+          width,
+          height,
+          fontSize: clampFontSize(
+            Math.max(12, height * 0.8)
+          ),
+          align: 'left',
+          locked: false
+        };
+      });
+
+    setHistory((previous) => [...previous, fields]);
+
+    setFields((current) => [
+      ...current.filter((field) => !field.isOcrText),
+      ...extractedFields
+    ]);
+
+    setSelectedField(extractedFields[0]?.id ?? null);
+    setEditingField(extractedFields[0]?.id ?? null);
+
+    setExtractMessage(
+      `Detected ${extractedFields.length} editable text layers.`
+    );
+  } catch (error) {
+    setExtractMessage(
+      error instanceof Error
+        ? error.message
+        : 'Failed to extract text.'
+    );
+  } finally {
+    if (worker) {
+      await worker.terminate();
+    }
+
+    setExtractingText(false);
+  }
+};
 const autoArrangeFields = () => {
 
   if (availableFields.length === 0) return;
@@ -1586,6 +1783,24 @@ startFontSize: field.fontSize
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Editing tools</p>
               <p className="mt-1 text-xs font-medium text-slate-400">Drag, add, edit</p>
+              <Button
+  type="button"
+  className="mt-4 w-full"
+  onClick={extractExistingTextFromTemplate}
+  disabled={extractingText}
+>
+  <Wand2 className="mr-2 h-4 w-4" />
+
+  {extractingText
+    ? 'Extracting text...'
+    : 'Extract existing text'}
+</Button>
+
+{extractMessage ? (
+  <p className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+    {extractMessage}
+  </p>
+) : null}
               <div className="mt-5 space-y-3">
 
   <label className="text-sm font-medium">
