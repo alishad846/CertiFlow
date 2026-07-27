@@ -23,5 +23,8 @@
     "esbuild@0.28.0": true,
     "msgpackr-extract@3.0.3": true,
     "sharp@0.34.5": true
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }

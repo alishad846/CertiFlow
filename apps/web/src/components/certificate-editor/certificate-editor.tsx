@@ -1,6 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+    useEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
 import {
   CheckCircle2,
   Plus,
@@ -137,6 +142,22 @@ export type CertificateEditorProps = {
   }) => Promise<void>;
 };
 
+const MemoPlaceholder = React.memo(
+  React.forwardRef<
+    HTMLDivElement,
+    React.HTMLAttributes<HTMLDivElement>
+  >(function MemoPlaceholder(
+    { children, ...props },
+    ref
+  ) {
+    return (
+      <div ref={ref} {...props}>
+        {children}
+      </div>
+    );
+  })
+);
+
 export function CertificateEditor({
   template,
   onSave
@@ -183,6 +204,7 @@ const [snapEnabled, setSnapEnabled] =
   const [previewLoading, setPreviewLoading] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [zoom, setZoom] = useState(1);
+  const zoomAnimation = useRef<number | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -208,7 +230,6 @@ const [resizeState, setResizeState] = useState<{
 
 const [rotateState, setRotateState] = useState<{
   field: string;
-  startAngle: number;
 } | null>(null);
  
   useEffect(() => {
@@ -220,75 +241,98 @@ const [rotateState, setRotateState] = useState<{
     const dx = event.clientX - resizeState.startX;
     const dy = event.clientY - resizeState.startY;
 
-    setFields((current) =>
-      current.map((field) =>
-        field.id === resizeState.field
-          ? {
-    ...field,
+const stage = pageRefs.current[
+    fields.find(f => f.id === resizeState.field)?.pageNumber ?? 1
+];
 
-    x:
-      ["left", "top-left", "bottom-left"].includes(resizeState.handle)
-        ? resizeState.startLeft + dx / (zoom * fitZoom)
-        : field.x,
+if (!stage) return;
 
-    y:
-      ["top", "top-left", "top-right"].includes(resizeState.handle)
-        ? resizeState.startTop + dy / (zoom * fitZoom)
-        : field.y,
+const stageRect = stage.getBoundingClientRect();
 
-    width:
-      ["left", "top-left", "bottom-left"].includes(resizeState.handle)
+const stageWidth =
+    stageRect.width / (zoom * fitZoom);
+
+const stageHeight =
+    stageRect.height / (zoom * fitZoom);
+
+    if (animationFrame.current) {
+  cancelAnimationFrame(animationFrame.current);
+}
+
+animationFrame.current = requestAnimationFrame(() => {
+  setFields((current) =>
+    current.map((field) =>
+      field.id === resizeState.field
+        ? {
+            ...field,
+
+            x:
+              ["left", "top-left", "bottom-left"].includes(resizeState.handle)
+                ? resizeState.startLeft + dx / (zoom * fitZoom)
+                : field.x,
+
+            y:
+              ["top", "top-left", "top-right"].includes(resizeState.handle)
+                ? resizeState.startTop + dy / (zoom * fitZoom)
+                : field.y,
+
+            width:
+    ["left", "top-left", "bottom-left"].includes(resizeState.handle)
         ? Math.max(
-            40,
-            resizeState.startWidth - dx / (zoom * fitZoom)
+              40,
+              resizeState.startWidth - dx / (zoom * fitZoom)
           )
         : ["right", "top-right", "bottom-right"].includes(resizeState.handle)
         ? Math.max(
-            40,
-            resizeState.startWidth + dx / (zoom * fitZoom)
+              40,
+              resizeState.startWidth + dx / (zoom * fitZoom)
           )
         : field.width,
 
-    height:
-      ["top", "top-left", "top-right"].includes(resizeState.handle)
+            height:
+    ["top", "top-left", "top-right"].includes(resizeState.handle)
         ? Math.max(
-            40,
-            resizeState.startHeight - dy / (zoom * fitZoom)
+              40,
+              resizeState.startHeight - dy / (zoom * fitZoom)
           )
         : ["bottom", "bottom-left", "bottom-right"].includes(resizeState.handle)
         ? Math.max(
-            40,
-            resizeState.startHeight + dy / (zoom * fitZoom)
+              40,
+              resizeState.startHeight + dy / (zoom * fitZoom)
           )
         : field.height ?? 50,
 
-    fontSize:
-      ["top-left", "top-right", "bottom-left", "bottom-right"].includes(
-        resizeState.handle
-      )
-        ? Math.max(
-            8,
-            Math.min(
-              220,
-              resizeState.startFontSize +
-                (resizeState.handle.includes("left")
-                  ? -dx
-                  : dx) /
-                  (zoom * fitZoom * 5)
-            )
-          )
-        : field.fontSize
-  }
-: field
-
-      )
-    );
+            fontSize:
+              ["top-left", "top-right", "bottom-left", "bottom-right"].includes(
+                resizeState.handle
+              )
+                ? Math.max(
+                    8,
+                    Math.min(
+                      220,
+                      resizeState.startFontSize +
+                        (resizeState.handle.includes("left") ? -dx : dx) /
+                          (zoom * fitZoom * 5)
+                    )
+                  )
+                : field.fontSize,
+          }
+        : field
+    )
+  );
+});
 
   };
 
   const handleUp = () => {
-    setResizeState(null);
-  };
+
+  if (animationFrame.current) {
+    cancelAnimationFrame(animationFrame.current);
+    animationFrame.current = null;
+  }
+
+  setResizeState(null);
+};
 
   window.addEventListener("pointermove", handleMove);
   window.addEventListener("pointerup", handleUp);
@@ -320,6 +364,131 @@ const pointerY =
 let nextX = pointerX - dragState.offsetX;
 let nextY = pointerY - dragState.offsetY;
 
+let snapVertical: number | null = null;
+let snapHorizontal: number | null = null;
+
+const GRID_SIZE = 4;
+
+if (snapEnabled) {
+    nextX = Math.round(nextX / GRID_SIZE) * GRID_SIZE;
+    nextY = Math.round(nextY / GRID_SIZE) * GRID_SIZE;
+}
+
+const field = fields.find((f) => f.id === dragState.field);
+
+if (field && snapEnabled) {
+
+  nextX = Math.max(0, Math.min(nextX, stageWidth - field.width));
+nextY = Math.max(0, Math.min(nextY, stageHeight - (field.height ?? 50)));
+
+    const centerX = stageWidth / 2;
+    const centerY = stageHeight / 2;
+
+if (Math.abs(nextX) < 8) {
+    nextX = 0;
+    snapVertical = 0;
+}
+
+if (Math.abs(nextX + field.width - stageWidth) < 8) {
+    nextX = stageWidth - field.width;
+    snapVertical = stageWidth;
+}
+
+if (Math.abs(nextY) < 8) {
+    nextY = 0;
+    snapHorizontal = 0;
+}
+
+const fieldHeight = field.height ?? 50;
+
+if (Math.abs(nextY + fieldHeight - stageHeight) < 12) {
+    nextY = stageHeight - fieldHeight;
+    snapHorizontal = stageHeight;
+}
+
+    const fieldCenterX = nextX + field.width / 2;
+    const fieldCenterY = nextY + (field.height ?? 50) / 2;
+
+    if (Math.abs(fieldCenterX - centerX) < 8) {
+    nextX = centerX - field.width / 2;
+    snapVertical = centerX;
+}
+
+    if (Math.abs(fieldCenterY - centerY) < 8) {
+    nextY = centerY - (field.height ?? 50) / 2;
+    snapHorizontal = centerY;
+}
+
+fields.forEach((other) => {
+    if (other.id === field.id) return;
+
+if (Math.abs(nextX - other.x) < SNAP_DISTANCE) {
+    nextX = other.x;
+    snapVertical = other.x;
+}
+    if (
+        Math.abs(
+            nextX + field.width - (other.x + other.width)
+        ) < SNAP_DISTANCE
+    ) {
+        nextX = other.x + other.width - field.width;
+        snapVertical = other.x + other.width;
+    }
+    if (snapHorizontal === null && Math.abs(nextY - other.y) < SNAP_DISTANCE) {
+        nextY = other.y;
+        snapHorizontal = other.y;
+    }
+    const otherHeight = other.height ?? 50;
+
+    if (
+        Math.abs(
+            nextY + (field.height ?? 50) -
+            (other.y + otherHeight)
+        ) < SNAP_DISTANCE
+    ) {
+        nextY = other.y + otherHeight - (field.height ?? 50);
+        snapHorizontal = other.y + otherHeight;
+    }
+const otherCenterX = other.x + other.width / 2;
+const fieldCenterX = nextX + field.width / 2;
+
+if (Math.abs(fieldCenterX - otherCenterX) < SNAP_DISTANCE) {
+    nextX = otherCenterX - field.width / 2;
+    snapVertical = otherCenterX;
+}
+const otherCenterY = other.y + (other.height ?? 50) / 2;
+const fieldCenterY = nextY + (field.height ?? 50) / 2;
+
+if (Math.abs(fieldCenterY - otherCenterY) < SNAP_DISTANCE) {
+    nextY = otherCenterY - (field.height ?? 50) / 2;
+    snapHorizontal = otherCenterY;
+}
+
+if (Math.abs(nextX - otherCenterX) < SNAP_DISTANCE) {
+    nextX = otherCenterX;
+    snapVertical = otherCenterX;
+}
+if (Math.abs(nextX + field.width - otherCenterX) < SNAP_DISTANCE) {
+    nextX = otherCenterX - field.width;
+    snapVertical = otherCenterX;
+}
+if (Math.abs(nextY - otherCenterY) < SNAP_DISTANCE) {
+    nextY = otherCenterY;
+    snapHorizontal = otherCenterY;
+}
+if (
+    Math.abs(
+        nextY + (field.height ?? 50) - otherCenterY
+    ) < SNAP_DISTANCE
+) {
+    nextY = otherCenterY - (field.height ?? 50);
+    snapHorizontal = otherCenterY;
+}
+
+});
+
+}
+
 if (event.shiftKey) {
   const field = fields.find(f => f.id === dragState.field);
 
@@ -334,7 +503,6 @@ if (event.shiftKey) {
     }
   }
 }
-
     setFields((current) =>
       current.map((field) =>
         field.id === dragState.field
@@ -347,11 +515,21 @@ if (event.shiftKey) {
       )
     );
 
+    setGuideLines({
+    vertical: snapVertical,
+    horizontal: snapHorizontal,
+});
+
   };
 
   const handleUp = () => {
+    setGuideLines({
+        vertical: null,
+        horizontal: null,
+    });
+
     setDragState(null);
-  };
+};
 
   window.addEventListener("pointermove", handleMove);
   window.addEventListener("pointerup", handleUp);
@@ -415,6 +593,10 @@ updateField(field.id, {
 } | null>(null);
 
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const placeholderRefs = useRef<
+  Record<string, HTMLDivElement | null>
+>({});
+const animationFrame = useRef<number | null>(null);
 
   useEffect(() => {
     setName(template.name);
@@ -558,9 +740,6 @@ if (
   const selectedPlaceholder = fields.find(
   (f) => f.id === selectedField
 );
-
-console.log("Locked:", selectedPlaceholder?.locked);
-
 if (selectedPlaceholder?.locked) {
   event.preventDefault();
   return;
@@ -696,29 +875,65 @@ if (event.ctrlKey && event.key.toLowerCase() === "z") {
   }, [stageHeight, stageWidth]);
 
   useEffect(() => {
-    const wheelOptions = { passive: false, capture: true } as const;
-    const handleWheel = (event: WheelEvent) => {
-      if (!selectedField || !editorRootRef.current) {
-        return;
-      }
+    const wheelOptions: AddEventListenerOptions = {
+  passive: false,
+};
+    const handleWheel: EventListener = (event) => {
+      const wheelEvent = event as WheelEvent;
+      if (!editorRootRef.current) {
+    return;
+}
 
       if (!editorRootRef.current.contains(event.target as Node)) {
         return;
       }
 
-      if (!event.ctrlKey) {
+      if (!wheelEvent.ctrlKey) {
         return;
       }
 
-      event.preventDefault();
-      changeSelectedFontSize(event.deltaY < 0 ? FONT_SIZE_STEP : -FONT_SIZE_STEP);
+      wheelEvent.preventDefault();
+      if (selectedField) {
+  changeSelectedFontSize(wheelEvent.deltaY < 0 ? FONT_SIZE_STEP : -FONT_SIZE_STEP);
+} else {
+  const viewport = canvasViewportRef.current;
+if (!viewport) return;
+
+const rect = viewport.getBoundingClientRect();
+
+const mouseX = wheelEvent.clientX - rect.left + viewport.scrollLeft;
+const mouseY = wheelEvent.clientY - rect.top + viewport.scrollTop;
+
+const oldZoom = zoom;
+
+const newZoom = Math.max(
+  0.5,
+  Math.min(2, oldZoom + (wheelEvent.deltaY < 0 ? 0.03 : -0.03))
+);
+
+const scale = newZoom / oldZoom;
+
+viewport.scrollLeft =
+  mouseX * scale - (wheelEvent.clientX - rect.left);
+
+viewport.scrollTop =
+  mouseY * scale - (wheelEvent.clientY - rect.top);
+
+if (zoomAnimation.current) {
+  cancelAnimationFrame(zoomAnimation.current);
+}
+
+zoomAnimation.current = requestAnimationFrame(() => {
+  setZoom(newZoom);
+});
+}
     };
 
     window.addEventListener('wheel', handleWheel, wheelOptions);
     return () => {
       window.removeEventListener('wheel', handleWheel, wheelOptions);
     };
-  }, [selectedField]);
+  }, [selectedField, zoom]);
 
   const resolvedIssueDate = useMemo(() => {
     if (issueDateMode === 'manual' && issueDateValue) {
@@ -755,7 +970,6 @@ const detectExcelFields = async () => {
     });
 
     setAvailableFields(response.fields);
-    console.log("Detected Fields:", response.fields);
   } catch (err) {
     alert(
       err instanceof Error
@@ -823,12 +1037,6 @@ const autoArrangeFields = () => {
 
   if (availableFields.length === 0) return;
 
-  const startX = stageWidth * 0.25;
-
-  let currentY = stageHeight * 0.28;
-
-  const gap = 70;
-
   const generated: EditorFieldConfig[] = [];
 
   availableFields.forEach((item, index) => {
@@ -840,20 +1048,29 @@ const autoArrangeFields = () => {
   const field = item.field.toLowerCase();
 
   if (field.includes("name")) {
-    y = stageHeight * 0.45;
-  }
+    x = stageWidth / 2 - getPlaceholderFieldWidth(item.field) / 2;
+    y = stageHeight * 0.41;
+}
 
-  else if (field.includes("course")) {
-    y = stageHeight * 0.55;
-  }
+else if (field.includes("email")) {
+    x = stageWidth / 2 - getPlaceholderFieldWidth(item.field) / 2;
+y = stageHeight * 0.47;
+}
 
-  else if (field.includes("department")) {
-    y = stageHeight * 0.60;
-  }
+else if (field.includes("course")) {
+    x = stageWidth / 2 - getPlaceholderFieldWidth(item.field) / 2;
+y = stageHeight * 0.56;
+}
 
-  else if (field.includes("college")) {
-    y = stageHeight * 0.65;
-  }
+else if (field.includes("department")) {
+    x = stageWidth / 2 - getPlaceholderFieldWidth(item.field) / 2;
+y = stageHeight * 0.64;
+}
+
+else if (field.includes("college")) {
+    x = stageWidth / 2 - getPlaceholderFieldWidth(item.field) / 2;
+y = stageHeight * 0.72;
+}
 
   else if (field.includes("roll")) {
     x = stageWidth * 0.18;
@@ -867,8 +1084,7 @@ const autoArrangeFields = () => {
 
   else if (field.includes("date")) {
     x = stageWidth * 0.70;
-    y = stageHeight * 0.90;
-  }
+y = stageHeight * 0.82;  }
 
   generated.push({
 
@@ -887,9 +1103,6 @@ const autoArrangeFields = () => {
     width: getPlaceholderFieldWidth(item.field),
 
   });
-
-    currentY += gap;
-
   });
 
   setFields(generated);
@@ -1006,10 +1219,15 @@ const sendBackward = () => {
         ) : null}
 
         <div
-          ref={canvasViewportRef}
-          className="w-full overflow-auto rounded-[24px] border border-slate-200 bg-slate-100"
-          style={{ minHeight: 'calc(100vh - 220px)', maxHeight: 'calc(100vh - 220px)' }}
-        >
+  ref={canvasViewportRef}
+  className="w-full overflow-auto rounded-[24px] border border-slate-200 bg-[#f3f4f6]"
+  style={{
+  minHeight: "calc(100vh - 220px)",
+  maxHeight: "calc(100vh - 220px)",
+  scrollBehavior: "auto",
+  willChange: "transform"
+}}
+>
           <div className="space-y-4 p-4">
             {previewLoading ? (
               <div className="rounded-[18px] border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
@@ -1017,11 +1235,56 @@ const sendBackward = () => {
               </div>
             ) : null}
             {pagesToRender.map((page) => {
-              const pageFields = fields.filter((field) => (field.pageNumber ?? 1) === page.pageNumber);
+              const pageFields = fields.filter(
+  (field) => (field.pageNumber ?? 1) === page.pageNumber
+);
               const isActivePage = activePage === page.pageNumber;
               return (
               <div
                 key={page.pageNumber}
+                onClick={(event: React.MouseEvent<HTMLDivElement>) => {
+  if (event.target === event.currentTarget) {
+    setSelectedField(null);
+  }
+}}
+
+onDoubleClick={(event: React.MouseEvent<HTMLDivElement>) => {
+
+  const target = event.target as HTMLElement;
+
+  if (target.closest("[role='button']")) {
+    return;
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect();
+
+  const x =
+    (event.clientX - rect.left) / displayZoom;
+  const y =
+    (event.clientY - rect.top) / displayZoom;
+
+  const id = createEditorFieldId("text", fields.length);
+
+  const newField: EditorFieldConfig = {
+    ...defaultFieldStyle,
+    id,
+    field: createUniqueFieldName("text", fields),
+    text: DEFAULT_FREE_TEXT,
+    pageNumber: page.pageNumber,
+    x,
+    y,
+    width: getFreeTextFieldWidth(DEFAULT_FREE_TEXT),
+    height: 50,
+    locked: false,
+  };
+
+  setFields((prev) => [...prev, newField]);
+  setSelectedField(id);
+  setTimeout(() => {
+  setEditingField(id);
+}, 0);
+}}
+
                 ref={(element) => {
                   pageRefs.current[page.pageNumber] = element;
                 }}
@@ -1071,12 +1334,19 @@ height: 50,
                   isActivePage ? 'border-2 border-accent-500' : 'border border-slate-300'
                 }`}
                 style={{
-                  width: page.width * displayZoom,
-                  height: page.height * displayZoom
-                }}
+    width: page.width,
+    height: page.height,
+
+    transform: `scale(${displayZoom})`,
+    transformOrigin: "top left",
+    willChange: "transform"
+}}
               >
                 <img
                   src={page.src}
+                  onClick={() => {
+  setSelectedField(null);
+}}
                   alt={`${template.name} page ${page.pageNumber}`}
                   className="absolute inset-0 h-full w-full select-none object-fill"
                   draggable={false}
@@ -1086,7 +1356,10 @@ height: 50,
 <div
 className="absolute top-0 bottom-0 w-[2px] bg-blue-500 opacity-70 pointer-events-none"
 style={{
-left: guideLines.vertical * displayZoom
+    left:
+        guideLines.vertical === stageWidth
+            ? stageWidth - 2
+            : guideLines.vertical
 }}
 />
 
@@ -1097,7 +1370,10 @@ left: guideLines.vertical * displayZoom
 <div
 className="absolute left-0 right-0 h-[2px] bg-blue-500 opacity-70 pointer-events-none"
 style={{
-top: guideLines.horizontal * displayZoom
+    top:
+        guideLines.horizontal === stageHeight
+            ? stageHeight - 2
+            : guideLines.horizontal
 }}
 />
 
@@ -1109,28 +1385,41 @@ top: guideLines.horizontal * displayZoom
 
                 {pageFields.map((field) => {
                   const isSelected = field.id === selectedField;
+                  const isDragging =
+  dragState?.field === field.id;
+
+const isResizing =
+  resizeState?.field === field.id;
+
+const isRotating =
+  rotateState?.field === field.id;
                   const isIssueDate = field.field === 'issue_date';
                   const isFreeText = typeof field.text === 'string';
                   const displayText = isFreeText ? field.text ?? '' : isIssueDate ? resolvedIssueDate : `{${field.field}}`;
                   return (
                       <div
-                      key={`${page.pageNumber}-${field.id}`}
+                        ref={(el) => {
+  placeholderRefs.current[field.id] = el;
+}}
+                        key={`${page.pageNumber}-${field.id}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => {
-                        setSelectedField(field.id);
-                        setActivePage(field.pageNumber ?? 1);
-                      }}
-                      onDoubleClick={() => {
+                      onClick={(event) => {
+  event.stopPropagation();
+  setSelectedField(field.id);
+  setActivePage(field.pageNumber ?? 1);
+}}
+                      onDoubleClick={(event) => {
+  event.stopPropagation();
   setEditingField(field.id);
 }}
-                      onKeyDown={(event) => {
+                      onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           setSelectedField(field.id);
                           setActivePage(field.pageNumber ?? 1);
                         }
                       }}
-                      onPointerDown={(event) => {
+                      onPointerDown={(event: React.PointerEvent<HTMLDivElement>) => {
                       event.preventDefault();
                       if (field.locked) return;
                       const rect = pageRefs.current[page.pageNumber]?.getBoundingClientRect();
@@ -1153,23 +1442,41 @@ top: guideLines.horizontal * displayZoom
                           : 'hover:ring-1 hover:ring-accent-200'
                       }`}
                       style={{
-  left: field.x * displayZoom,
-  top: field.y * displayZoom,
-  width: field.width * displayZoom,
-  height: (field.height ?? 50) * displayZoom,
-  fontSize: field.fontSize * displayZoom,
+  left: field.x,
+  top: field.y,
+  width: field.width,
+  height: field.height ?? 50,
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent:
+    field.align === "left"
+      ? "flex-start"
+      : field.align === "right"
+      ? "flex-end"
+      : "center",
+
+  padding: "4px 8px",
+
+  fontSize: field.fontSize,
   color: field.color,
   fontWeight: field.fontWeight ?? "normal",
   fontStyle: field.fontStyle ?? "normal",
-  transform: `rotate(${field.rotation ?? 0}deg)`,
-transformOrigin: "center",
-  textDecoration: field.textDecoration ?? "none",
   fontFamily: field.fontFamily,
   textAlign: field.align,
-  lineHeight: 1.1
+  textDecoration: field.textDecoration ?? "none",
+
+  transform: `rotate(${field.rotation ?? 0}deg)`,
+  transformOrigin: "center",
+
+  lineHeight: 1.2,
+
+  willChange:
+    isDragging || isResizing || isRotating
+      ? "transform"
+      : "auto",
 }}
                     >
-                      {isSelected ? (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -1177,12 +1484,13 @@ transformOrigin: "center",
                           event.stopPropagation();
                             removeSelected();
                           }}
-                          className="absolute -right-3 -top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-md transition hover:bg-red-50"
+                          className={`absolute -right-4 -top-4 z-50 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-red-500 text-white shadow-lg transition hover:scale-110 hover:bg-red-600 ${
+  isSelected ? "opacity-100" : "opacity-90"
+}`}
                           aria-label={`Remove ${field.field}`}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-5 w-5" strokeWidth={3} />
                         </button>
-                      ) : null}
                       {editingField === field.id ? (
   <input
     autoFocus
@@ -1203,7 +1511,7 @@ transformOrigin: "center",
 ) : (
   <>
     <span
-      className={`pointer-events-none block bg-white/0 ${
+  className={`pointer-events-none w-full ${
         isFreeText
           ? "whitespace-pre-wrap break-words"
           : "whitespace-nowrap"
@@ -1220,9 +1528,8 @@ transformOrigin: "center",
         event.stopPropagation();
 
         setRotateState({
-          field: field.id,
-          startAngle: field.rotation ?? 0,
-        });
+    field: field.id,
+});
       }}
       className="absolute left-1/2 -top-8 h-5 w-5 -translate-x-1/2 rounded-full border-2 border-white bg-green-500 shadow cursor-grab"
     />
@@ -1306,7 +1613,6 @@ startFontSize: field.fontSize
       ? "Detecting..."
       : "Detect Excel Fields"}
   </Button>
-
 </div>
             </div>
           </div>
@@ -1688,12 +1994,21 @@ startFontSize: field.fontSize
   className="w-full rounded-xl border border-slate-200 p-2"
 >
   <option>Arial</option>
-  <option>Times New Roman</option>
-  <option>Calibri</option>
-  <option>Georgia</option>
-  <option>Verdana</option>
-  <option>Tahoma</option>
-  <option>Courier New</option>
+<option>Calibri</option>
+<option>Cambria</option>
+<option>Courier New</option>
+<option>Georgia</option>
+<option>Garamond</option>
+<option>Helvetica</option>
+<option>Lato</option>
+<option>Montserrat</option>
+<option>Open Sans</option>
+<option>Poppins</option>
+<option>Roboto</option>
+<option>Tahoma</option>
+<option>Times New Roman</option>
+<option>Trebuchet MS</option>
+<option>Verdana</option>
 </select>
 <div>
   <label className="mb-2 block text-sm font-medium text-slate-700">
