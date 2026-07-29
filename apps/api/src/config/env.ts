@@ -78,7 +78,12 @@ const envSchema = z.object({
   // cert. If unset, a self-signed dev P12 is auto-generated under CERT_STORE_DIR.
   CERT_SIGNING_ENABLED: z.coerce.boolean().default(true),
   CERT_SIGNING_P12_PATH: z.string().optional().default(''),
-  CERT_SIGNING_P12_PASSPHRASE: z.string().default('certiflow')
+  CERT_SIGNING_P12_PASSPHRASE: z.string().default('certiflow'),
+
+  // Server-side Unsplash proxy for the editor's "Collection" image tab (Task 10a). The key never
+  // reaches the browser: the client-side unsplash-js tab is intentionally left disabled
+  // (see apps/web/src/components/editor/editor-config.ts). Empty string => search-images degrades to [].
+  UNSPLASH_ACCESS_KEY: z.string().optional().default('')
 });
 
 export const env = envSchema.parse(process.env);

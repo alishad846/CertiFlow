@@ -8,8 +8,11 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { getCompanyAccess } from '../services/companies';
+import { STOCK_TEMPLATES } from '../services/stock-templates';
 import {
   type CertificateFieldConfig,
+  createBlankEditorTemplate,
+  createFromStockTemplate,
   createCertificateTemplate,
   deleteCertificateTemplate,
   duplicateCertificateTemplate,
@@ -17,7 +20,8 @@ import {
   getActiveCertificateTemplate,
   listCertificateTemplates,
   resolveCertificateIssueDate,
-  updateCertificateTemplate
+  updateCertificateTemplate,
+  updateCertificateTemplateDesign
 } from '../services/certificate-templates';
 import { readExcelRecipients, buildTemplateContext } from '../services/excel';
 import {
@@ -161,6 +165,24 @@ router.get(
   })
 );
 
+// Ready-made template gallery: list shipped stock designs. Must precede GET /:id so "stock"
+// isn't parsed as a template id.
+router.get(
+  '/stock',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  asyncHandler(async (req, res) => {
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.json({
+      templates: STOCK_TEMPLATES.map((t) => ({
+        id: t.id,
+        name: t.name,
+        thumbnailUrl: `${base}/api/editor/stock/${t.file}`
+      }))
+    });
+  })
+);
+
 router.get(
   '/:id',
   requireAuth,
@@ -300,6 +322,59 @@ router.post(
 );
 
 router.post(
+  '/blank',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  asyncHandler(async (req, res) => {
+    const companyId = await resolveCompanyId(req, String(req.body?.companyId ?? '').trim());
+
+    const company = await getCompanyAccess(companyId);
+    if (!company || company.status !== 'active') {
+      throw new AppError('Company is blocked', 403);
+    }
+    if (!company.can_create_batches) {
+      throw new AppError('Batch creation is disabled for this company', 403);
+    }
+
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
+    const template = await createBlankEditorTemplate({
+      companyId,
+      createdBy: req.user!.id,
+      name: name || undefined
+    });
+
+    res.status(201).json({ template });
+  })
+);
+
+// Clone a stock design into the company and open it in the editor.
+router.post(
+  '/from-stock',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  asyncHandler(async (req, res) => {
+    const companyId = await resolveCompanyId(req, String(req.body?.companyId ?? '').trim());
+
+    const company = await getCompanyAccess(companyId);
+    if (!company || company.status !== 'active') {
+      throw new AppError('Company is blocked', 403);
+    }
+    if (!company.can_create_batches) {
+      throw new AppError('Batch creation is disabled for this company', 403);
+    }
+
+    const stockId = String(req.body?.stockId ?? '').trim();
+    const template = await createFromStockTemplate({
+      companyId,
+      createdBy: req.user!.id,
+      stockId
+    });
+
+    res.status(201).json({ template });
+  })
+);
+
+router.post(
   '/preview',
   requireAuth,
   requireRole('company_admin', 'super_admin'),
@@ -377,6 +452,34 @@ router.put(
       issueDateValue: parsed.issueDateValue ?? undefined
     });
 
+    res.json({ template: updated });
+  })
+);
+
+router.put(
+  '/:id/design',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  asyncHandler(async (req, res) => {
+    const template = await getCertificateTemplateById(String(req.params.id));
+    if (!template) throw new AppError('Certificate template not found', 404);
+    if (req.user?.role !== 'super_admin' && template.companyId !== req.user?.companyId) {
+      throw new AppError('Forbidden', 403);
+    }
+    if (!req.body || typeof req.body !== 'object' || !('editorDocument' in req.body)) {
+      throw new AppError('editorDocument is required', 400);
+    }
+    const body = z.object({
+      name: z.string().min(1).optional(),
+      editorDocument: z.unknown()
+    }).parse(req.body);
+    const updated = await updateCertificateTemplateDesign({
+      templateId: String(req.params.id),
+      companyId: template.companyId,
+      updatedBy: req.user!.id,
+      name: body.name,
+      editorDocument: body.editorDocument
+    });
     res.json({ template: updated });
   })
 );

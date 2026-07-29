@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
 import { randomUUID } from 'crypto';
@@ -7,6 +8,7 @@ import { pool, withTransaction } from '../db/pool';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { ensureDir, safeSegment } from './fs';
+import { getStockTemplate, stockImagePath } from './stock-templates';
 
 export type CertificateFieldConfig = {
   field: string;
@@ -38,6 +40,8 @@ type CertificateTemplateRow = {
   updated_at: string;
   background_original_name: string;
   background_stored_path: string;
+  editor_document: unknown | null;
+  render_engine: string;
 };
 
 function toFileUrl(storedPath: string) {
@@ -106,7 +110,9 @@ function mapTemplateRow(row: CertificateTemplateRow) {
     updatedAt: row.updated_at,
     backgroundUrl: toFileUrl(row.background_stored_path),
     backgroundOriginalName: row.background_original_name,
-    backgroundStoredPath: row.background_stored_path
+    backgroundStoredPath: row.background_stored_path,
+    editorDocument: row.editor_document ?? null,
+    renderEngine: row.render_engine === 'editor' ? ('editor' as const) : ('legacy' as const)
   };
 }
 
@@ -115,6 +121,7 @@ export async function listCertificateTemplates(companyId: string) {
     `SELECT ct.id, ct.company_id, ct.name, ct.background_upload_id, ct.field_config,
             ct.issue_date_mode, ct.issue_date_value,
             ct.image_width, ct.image_height, ct.is_active, ct.created_at, ct.updated_at,
+            ct.editor_document, ct.render_engine,
             u.original_name AS background_original_name, u.stored_path AS background_stored_path
      FROM certificate_templates ct
      INNER JOIN uploads u ON u.id = ct.background_upload_id
@@ -131,6 +138,7 @@ export async function getCertificateTemplateById(templateId: string, companyId?:
     `SELECT ct.id, ct.company_id, ct.name, ct.background_upload_id, ct.field_config,
             ct.issue_date_mode, ct.issue_date_value,
             ct.image_width, ct.image_height, ct.is_active, ct.created_at, ct.updated_at,
+            ct.editor_document, ct.render_engine,
             u.original_name AS background_original_name, u.stored_path AS background_stored_path
      FROM certificate_templates ct
      INNER JOIN uploads u ON u.id = ct.background_upload_id
@@ -147,6 +155,7 @@ export async function getActiveCertificateTemplate(companyId: string) {
     `SELECT ct.id, ct.company_id, ct.name, ct.background_upload_id, ct.field_config,
             ct.issue_date_mode, ct.issue_date_value,
             ct.image_width, ct.image_height, ct.is_active, ct.created_at, ct.updated_at,
+            ct.editor_document, ct.render_engine,
             u.original_name AS background_original_name, u.stored_path AS background_stored_path
      FROM certificate_templates ct
      INNER JOIN uploads u ON u.id = ct.background_upload_id
@@ -207,7 +216,7 @@ export async function createCertificateTemplate(params: {
       `INSERT INTO certificate_templates (
         id, company_id, name, background_upload_id, field_config, issue_date_mode, issue_date_value, image_width, image_height, is_active, created_by
       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11)
-      RETURNING id, company_id, name, background_upload_id, field_config, issue_date_mode, issue_date_value, image_width, image_height, is_active, created_at, updated_at`,
+      RETURNING id, company_id, name, background_upload_id, field_config, issue_date_mode, issue_date_value, image_width, image_height, is_active, created_at, updated_at, editor_document, render_engine`,
       [
         templateId,
         params.companyId,
@@ -271,7 +280,7 @@ export async function updateCertificateTemplate(params: {
            updated_by = $8,
            updated_at = NOW()
        WHERE id = $1 AND company_id = $2
-       RETURNING id, company_id, name, background_upload_id, field_config, issue_date_mode, issue_date_value, image_width, image_height, is_active, created_at, updated_at`,
+       RETURNING id, company_id, name, background_upload_id, field_config, issue_date_mode, issue_date_value, image_width, image_height, is_active, created_at, updated_at, editor_document, render_engine`,
       [
         params.templateId,
         params.companyId,
@@ -355,6 +364,126 @@ export async function duplicateCertificateTemplate(params: {
     issueDateValue: current.issueDateValue,
     isActive: false
   });
+}
+
+export async function updateCertificateTemplateDesign(params: {
+  templateId: string;
+  companyId: string;
+  updatedBy: string;
+  name?: string;
+  editorDocument: unknown;
+}) {
+  const current = await getCertificateTemplateById(params.templateId, params.companyId);
+  if (!current) {
+    throw new AppError('Certificate template not found', 404);
+  }
+  const result = await pool.query<CertificateTemplateRow>(
+    `UPDATE certificate_templates
+       SET name = COALESCE($3, name),
+           editor_document = $4::jsonb,
+           render_engine = 'editor',
+           updated_by = $5,
+           updated_at = NOW()
+     WHERE id = $1 AND company_id = $2
+     RETURNING id, company_id, name, background_upload_id, field_config, issue_date_mode,
+               issue_date_value, image_width, image_height, is_active, created_at, updated_at,
+               editor_document, render_engine`,
+    [params.templateId, params.companyId, params.name ?? null, JSON.stringify(params.editorDocument ?? {}), params.updatedBy]
+  );
+  const updated = result.rows[0];
+  if (!updated) throw new AppError('Certificate template not found', 404);
+  return mapTemplateRow({
+    ...updated,
+    background_original_name: current.backgroundOriginalName,
+    background_stored_path: current.backgroundStoredPath
+  });
+}
+
+export async function createBlankEditorTemplate(params: { companyId: string; createdBy: string; name?: string }) {
+  const tempPath = path.join(os.tmpdir(), `blank-certificate-${randomUUID()}.png`);
+  const blankPng = await sharp({
+    create: {
+      width: 1414,
+      height: 1000,
+      channels: 3,
+      background: '#ffffff'
+    }
+  })
+    .png()
+    .toBuffer();
+
+  try {
+    await fs.writeFile(tempPath, blankPng);
+
+    const created = await createCertificateTemplate({
+      companyId: params.companyId,
+      createdBy: params.createdBy,
+      name: params.name ?? 'Untitled certificate',
+      backgroundFilePath: tempPath,
+      backgroundOriginalName: 'blank.png',
+      fieldConfig: [],
+      isActive: false
+    });
+
+    await pool.query(
+      `UPDATE certificate_templates
+         SET render_engine = 'editor',
+             editor_document = NULL,
+             updated_by = $3,
+             updated_at = NOW()
+       WHERE id = $1 AND company_id = $2`,
+      [created.id, params.companyId, params.createdBy]
+    );
+
+    const finalTemplate = await getCertificateTemplateById(created.id, params.companyId);
+    if (!finalTemplate) {
+      throw new AppError('Failed to create certificate template', 500);
+    }
+    return finalTemplate;
+  } finally {
+    await fs.rm(tempPath, { force: true }).catch(() => undefined);
+  }
+}
+
+// Clone a ready-made (stock) template into a company: copies its shipped background into the
+// company's uploads and flips the row to the editor engine with no saved design yet, so the
+// editor seeds the stock background on the canvas for the user to design on.
+export async function createFromStockTemplate(params: {
+  companyId: string;
+  createdBy: string;
+  stockId: string;
+}) {
+  const stock = getStockTemplate(params.stockId);
+  const srcPath = stockImagePath(params.stockId);
+  if (!stock || !srcPath) {
+    throw new AppError('Stock template not found', 404);
+  }
+
+  const created = await createCertificateTemplate({
+    companyId: params.companyId,
+    createdBy: params.createdBy,
+    name: stock.name,
+    backgroundFilePath: srcPath,
+    backgroundOriginalName: `${stock.id}.png`,
+    fieldConfig: [],
+    isActive: false
+  });
+
+  await pool.query(
+    `UPDATE certificate_templates
+       SET render_engine = 'editor',
+           editor_document = NULL,
+           updated_by = $3,
+           updated_at = NOW()
+     WHERE id = $1 AND company_id = $2`,
+    [created.id, params.companyId, params.createdBy]
+  );
+
+  const finalTemplate = await getCertificateTemplateById(created.id, params.companyId);
+  if (!finalTemplate) {
+    throw new AppError('Failed to create certificate template', 500);
+  }
+  return finalTemplate;
 }
 
 export function resolveCertificateIssueDate(template: {

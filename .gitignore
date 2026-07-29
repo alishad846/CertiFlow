@@ -13,3 +13,6 @@ apps/api/apps/api/uploads/*
 
 # Gated certificate PDF store (runtime)
 apps/api/secure-certificates/
+
+# Local Claude Code tooling (not part of the product)
+.claude/

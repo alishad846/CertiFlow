@@ -148,7 +148,7 @@ export default function TemplatesPage() {
 
                   <div className="flex flex-wrap gap-2">
                     <Button asChild variant="secondary">
-                      <Link href={`/certificate-editor/${template.id}`}>
+                      <Link href={`/editor/${template.id}`}>
                         <PencilLine className="mr-2 h-4 w-4" />
                         Edit
                       </Link>
@@ -163,7 +163,7 @@ export default function TemplatesPage() {
                           const result = await apiFetch<{ template: TemplateItem }>(`/certificate-templates/${template.id}/duplicate`, {
                             method: 'POST'
                           });
-                          window.location.assign(`/certificate-editor/${result.template.id}`);
+                          window.location.assign(`/editor/${result.template.id}`);
                         } catch (error) {
                           setMessage(error instanceof Error ? error.message : 'Failed to duplicate template');
                         } finally {

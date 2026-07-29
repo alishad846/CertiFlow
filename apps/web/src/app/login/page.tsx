@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [ticket, setTicket] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [lockedOut, setLockedOut] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const submitCredentials = async (event: React.FormEvent) => {
@@ -33,7 +34,15 @@ export default function LoginPage() {
         window.location.assign('/dashboard');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      const message = err instanceof Error ? err.message : 'Login failed';
+      // After the attempt limit is hit the API returns "Too many login attempts…" (HTTP 429).
+      // Instead of showing a raw countdown, guide the user to reset their password or step back.
+      if (/too many login attempts/i.test(message)) {
+        setLockedOut(true);
+        setError('');
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -65,7 +74,28 @@ export default function LoginPage() {
         <section className={styles.card}>
           <p className={styles.brand}>CertiFlow</p>
 
-          {step === 'credentials' ? (
+          {lockedOut ? (
+            <>
+              <h1 className={styles.title}>Too many attempts</h1>
+              <p className={styles.description}>
+                For your security, we paused sign-in after 10 failed attempts. Please wait 10 minutes
+                and try again, reset your password, or go back.
+              </p>
+
+              <div className={styles.form}>
+                <Link href="/forgot-password" className={styles.button} style={{ textAlign: 'center' }}>
+                  Reset password
+                </Link>
+                <Link
+                  href="/"
+                  className={styles.link}
+                  style={{ textAlign: 'center', marginTop: '0.25rem' }}
+                >
+                  ← Go back
+                </Link>
+              </div>
+            </>
+          ) : step === 'credentials' ? (
             <>
               <h1 className={styles.title}>Welcome back</h1>
               <p className={styles.description}>Sign in to manage batches, credits, and delivery logs.</p>

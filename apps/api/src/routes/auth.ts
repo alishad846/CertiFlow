@@ -7,7 +7,12 @@ import { pool, withTransaction } from '../db/pool';
 import { AppError } from '../lib/errors';
 import { env } from '../config/env';
 import { requireAuth } from '../middleware/auth';
-import { rateLimit } from '../lib/rate-limit';
+import {
+  rateLimit,
+  loginLockRemainingMs,
+  recordLoginFailure,
+  clearLoginFailures
+} from '../lib/rate-limit';
 import { getCompanyAccess } from '../services/companies';
 import { sendSystemEmail, getOtpEmailHtml } from '../services/email';
 import {
@@ -206,25 +211,31 @@ router.post(
 
 router.post(
   '/login',
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5,
-    message: 'Too many login attempts.',
-    keyGenerator: (req) => `${req.ip}:${String(req.body?.email ?? '').toLowerCase()}`
-  }),
   asyncHandler(async (req, res) => {
     const parsed = loginSchema.parse(req.body);
+    const loginKey = `${req.ip}:${parsed.email.toLowerCase()}`;
+
+    // Only failed attempts count; 10 failures locks this account+ip for 10 minutes.
+    if (loginLockRemainingMs(loginKey) > 0) {
+      throw new AppError('Too many login attempts.', 429);
+    }
+
     const result = await pool.query<LoginUserRow>(`${LOGIN_USER_SELECT} WHERE u.email = $1`, [parsed.email]);
 
     const user = result.rows[0];
     if (!user) {
+      recordLoginFailure(loginKey);
       throw new AppError('Invalid credentials', 401);
     }
 
     const passwordOk = await bcrypt.compare(parsed.password, user.password_hash);
     if (!passwordOk) {
+      recordLoginFailure(loginKey);
       throw new AppError('Invalid credentials', 401);
     }
+
+    // Credentials verified — clear any accumulated failures for this key.
+    clearLoginFailures(loginKey);
 
     if (user.role === 'company_admin') {
       const company = user.company_id ? await getCompanyAccess(user.company_id) : null;

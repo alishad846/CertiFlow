@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ImagePlus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ImagePlus, Sparkles, Plus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { getTemplatePreviewSrc } from '@/lib/template-preview';
 import { Card } from '@/components/ui/card';
@@ -10,12 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { FileDropzone } from '@/components/ui/file-dropzone';
 
-type MeResponse = {
-  user: {
-    role: 'super_admin' | 'company_admin';
-    companyId: string | null;
-  };
-};
+type MeResponse = { user: { role: 'super_admin' | 'company_admin'; companyId: string | null } };
 
 type TemplateSummary = {
   id: string;
@@ -26,34 +21,35 @@ type TemplateSummary = {
   imageHeight: number;
 };
 
-export default function CertificateEditorStartPage() {
-  const [companyId, setCompanyId] = useState('');
+type StockTemplate = { id: string; name: string; thumbnailUrl: string };
+
+type Selection =
+  | { kind: 'mine'; id: string }
+  | { kind: 'stock'; id: string }
+  | { kind: 'upload' }
+  | null;
+
+export default function CertificateEditorChooserPage() {
+  const router = useRouter();
   const [role, setRole] = useState<MeResponse['user']['role'] | null>(null);
-  const [activeTemplate, setActiveTemplate] = useState<TemplateSummary | null>(null);
+  const [companyId, setCompanyId] = useState('');
+  const [mine, setMine] = useState<TemplateSummary[]>([]);
+  const [stock, setStock] = useState<StockTemplate[]>([]);
+  const [selection, setSelection] = useState<Selection>(null);
   const [name, setName] = useState('');
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     let active = true;
     apiFetch<MeResponse>('/auth/me')
       .then((data) => {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setRole(data.user.role);
-        if (data.user.role !== 'super_admin') {
-          setCompanyId(data.user.companyId ?? '');
-        }
+        if (data.user.role !== 'super_admin') setCompanyId(data.user.companyId ?? '');
       })
-      .catch(() => {
-        if (!active) {
-          return;
-        }
-        setRole(null);
-      });
-
+      .catch(() => active && setRole(null));
     return () => {
       active = false;
     };
@@ -61,135 +57,197 @@ export default function CertificateEditorStartPage() {
 
   useEffect(() => {
     let active = true;
-    if (role !== 'company_admin' || !companyId) {
-      setActiveTemplate(null);
+    // Ready-made gallery (available to everyone).
+    apiFetch<{ templates: StockTemplate[] }>('/certificate-templates/stock')
+      .then((data) => active && setStock(data.templates ?? []))
+      .catch(() => active && setStock([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (role !== 'company_admin') {
+      setMine([]);
       return () => {
         active = false;
       };
     }
-
     apiFetch<{ templates: TemplateSummary[] }>('/certificate-templates/my')
-      .then((data) => {
-        if (!active) {
-          return;
-        }
-        setActiveTemplate(data.templates.find((template) => template.isActive) ?? data.templates[0] ?? null);
-      })
-      .catch(() => {
-        if (active) {
-          setActiveTemplate(null);
-        }
-      });
-
+      .then((data) => active && setMine(data.templates ?? []))
+      .catch(() => active && setMine([]));
     return () => {
       active = false;
     };
-  }, [companyId, role]);
+  }, [role]);
+
+  const openEditor = async () => {
+    setMessage('');
+    if (!selection) {
+      setMessage('Choose a template, pick a ready-made design, or upload your own to continue.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (selection.kind === 'mine') {
+        router.push(`/editor/${selection.id}`);
+        return;
+      }
+      if (selection.kind === 'stock') {
+        const res = await apiFetch<{ template: { id: string } }>('/certificate-templates/from-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stockId: selection.id, companyId: companyId || undefined })
+        });
+        router.push(`/editor/${res.template.id}`);
+        return;
+      }
+      // upload
+      if (!backgroundFile) {
+        setMessage('Please choose a PNG, JPG, or PDF background to upload.');
+        setBusy(false);
+        return;
+      }
+      const form = new FormData();
+      form.append('name', name || 'My certificate');
+      form.append('backgroundImage', backgroundFile);
+      if (companyId) form.append('companyId', companyId);
+      const res = await apiFetch<{ template: { id: string } }>('/certificate-templates', {
+        method: 'POST',
+        body: form
+      });
+      router.push(`/editor/${res.template.id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not open the editor.');
+      setBusy(false);
+    }
+  };
+
+  const cardBase =
+    'group relative overflow-hidden rounded-2xl border bg-paper/40 text-left transition focus:outline-none';
+  const isSel = (s: Selection) =>
+    selection && s && selection.kind === s.kind && (('id' in selection && 'id' in s) ? selection.id === s.id : true);
 
   return (
     <div className="space-y-6">
       <Card>
         <p className="eyebrow">Certificate editor</p>
         <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
-          Upload a background image or PDF and place dynamic fields on it.
+          Start a certificate design
         </h2>
+        <p className="mt-3 max-w-2xl text-sm text-ink-soft">
+          Pick one of your templates, choose a ready-made design, or upload your own background —
+          then open the full-screen editor to place names, dates, and details.
+        </p>
       </Card>
 
-      {activeTemplate ? (
+      {/* Your templates */}
+      {role === 'company_admin' ? (
         <Card>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-20 w-28 overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-paper/50">
-                <img
-                  src={getTemplatePreviewSrc(activeTemplate)}
-                  alt={activeTemplate.name}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div>
-                <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Current template</p>
-                <h3 className="mt-1 font-serif text-2xl text-ink">{activeTemplate.name}</h3>
-                <p className="mt-2 text-sm text-ink-soft">
-                  {activeTemplate.imageWidth} x {activeTemplate.imageHeight}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="secondary">
-                <Link href={`/certificate-editor/${activeTemplate.id}`}>Continue editing</Link>
-              </Button>
-              <Button asChild variant="secondary">
-                <Link href="/templates">Open templates</Link>
-              </Button>
-            </div>
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Your templates</p>
           </div>
+          {mine.length === 0 ? (
+            <p className="mt-4 text-sm text-ink-soft">You haven’t created any templates yet.</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {mine.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelection({ kind: 'mine', id: t.id })}
+                  className={`${cardBase} ${isSel({ kind: 'mine', id: t.id }) ? 'border-bronze ring-2 ring-bronze' : 'border-[color:var(--color-border)]'}`}
+                >
+                  <div className="aspect-[7/5] w-full overflow-hidden bg-paper/60">
+                    <img src={getTemplatePreviewSrc(t)} alt={t.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="px-3 py-2">
+                    <p className="truncate font-serif text-sm text-ink">{t.name}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
       ) : null}
 
+      {/* Ready-made gallery */}
       <Card>
-        <form
-          className="space-y-6"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setMessage('');
-            if (!backgroundFile) {
-              setMessage('Please choose a PNG, JPG, or PDF background file.');
-              return;
-            }
-
-            setLoading(true);
-            try {
-              const form = new FormData();
-              form.append('name', name || 'Certificate template');
-              form.append('backgroundImage', backgroundFile);
-              if (companyId) form.append('companyId', companyId);
-
-              const result = await apiFetch<{ template: { id: string } }>('/certificate-templates', {
-                method: 'POST',
-                body: form
-              });
-              window.location.assign(`/certificate-editor/${result.template.id}`);
-            } catch (error) {
-              setMessage(error instanceof Error ? error.message : 'Failed to create template');
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink-soft">Template name</label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Main certificate template" />
-            </div>
-            {role === 'super_admin' ? (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID for super admin</label>
-                <Input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="Only needed for super admin" />
-              </div>
-            ) : null}
+        <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Ready-made designs</p>
+        {stock.length === 0 ? (
+          <p className="mt-4 text-sm text-ink-soft">Ready-made designs are on the way.</p>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {stock.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSelection({ kind: 'stock', id: t.id })}
+                className={`${cardBase} ${isSel({ kind: 'stock', id: t.id }) ? 'border-bronze ring-2 ring-bronze' : 'border-[color:var(--color-border)]'}`}
+              >
+                <div className="aspect-[7/5] w-full overflow-hidden bg-paper/60">
+                  <img src={t.thumbnailUrl} alt={t.name} className="h-full w-full object-cover" />
+                </div>
+                <div className="px-3 py-2">
+                  <p className="truncate font-serif text-sm text-ink">{t.name}</p>
+                </div>
+              </button>
+            ))}
           </div>
-
-          <FileDropzone
-            label="Certificate background"
-            accept=".png,.jpg,.jpeg,.pdf"
-            description="Upload the original certificate background image or PDF."
-            onFileChange={setBackgroundFile}
-          />
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button type="submit" disabled={loading} className="sm:min-w-[220px]">
-              <ImagePlus className="mr-2 h-4 w-4" />
-              {loading ? 'Creating template' : 'Open editor'}
-            </Button>
-          </div>
-
-          {message ? (
-            <p className="rounded-2xl border border-[color:var(--color-border)] bg-paper/50 px-4 py-3 text-sm text-ink-soft">
-              {message}
-            </p>
-          ) : null}
-        </form>
+        )}
       </Card>
+
+      {/* Upload your own */}
+      <Card>
+        <button
+          type="button"
+          onClick={() => setSelection({ kind: 'upload' })}
+          className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left ${isSel({ kind: 'upload' }) ? 'border-bronze ring-2 ring-bronze' : 'border-[color:var(--color-border)]'}`}
+        >
+          <ImagePlus className="h-4 w-4 text-bronze" />
+          <span className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Upload your own</span>
+        </button>
+
+        {isSel({ kind: 'upload' }) ? (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink-soft">Template name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My certificate" />
+              </div>
+              {role === 'super_admin' ? (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID</label>
+                  <Input value={companyId} onChange={(e) => setCompanyId(e.target.value)} placeholder="Company ID (super admin)" />
+                </div>
+              ) : null}
+            </div>
+            <FileDropzone
+              label="Certificate background"
+              accept=".png,.jpg,.jpeg,.pdf"
+              description="Upload a PNG, JPG, or PDF to design on top of."
+              onFileChange={setBackgroundFile}
+            />
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Button onClick={openEditor} disabled={busy} className="sm:min-w-[220px]">
+          <Sparkles className="mr-2 h-4 w-4" />
+          {busy ? 'Opening editor…' : 'Open editor'}
+        </Button>
+        <Button variant="secondary" onClick={() => router.push('/editor/new')} disabled={busy}>
+          <Plus className="mr-2 h-4 w-4" /> Start from blank
+        </Button>
+      </div>
+
+      {message ? (
+        <p className="rounded-2xl border border-[color:var(--color-border)] bg-paper/50 px-4 py-3 text-sm text-ink-soft">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

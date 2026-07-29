@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --max_old_space_size=4096 dist/index.js",
     "start:worker": "node --max_old_space_size=4096 dist/worker.js",
-    "db:reset": "tsx src/scripts/reset-db.ts"
+    "db:reset": "tsx src/scripts/reset-db.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@certiflow/shared": "file:../../packages/shared",
@@ -56,7 +57,10 @@
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.15.4",
     "@types/qrcode": "^1.5.6",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.20.4",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
   }
 }

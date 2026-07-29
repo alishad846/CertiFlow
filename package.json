@@ -7,12 +7,12 @@
   ],
   "scripts": {
     "dev:shared": "npm run dev --workspace @certiflow/shared",
-    "predev": "npm run build --workspace @certiflow/shared && npm run build --workspace @certiflow/api",
+    "predev": "npm run build --workspace @certiflow/canva-editor && npm run build --workspace @certiflow/shared && npm run build --workspace @certiflow/api",
     "dev": "concurrently -n web,api,worker -c cyan,green,yellow \"npm run dev --workspace @certiflow/web\" \"npm run start --workspace @certiflow/api\" \"npm run start:worker --workspace @certiflow/api\"",
     "dev:web": "npm run dev --workspace @certiflow/web",
     "dev:api": "npm run start --workspace @certiflow/api",
     "dev:worker": "npm run start:worker --workspace @certiflow/api",
-    "build": "npm run build --workspace @certiflow/shared && npm run build --workspace @certiflow/api && npm run build --workspace @certiflow/web",
+    "build": "npm run build --workspace @certiflow/canva-editor && npm run build --workspace @certiflow/shared && npm run build --workspace @certiflow/api && npm run build --workspace @certiflow/web",
     "lint": "echo \"Add linting if desired\""
   },
   "devDependencies": {

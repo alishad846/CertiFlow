@@ -8,9 +8,11 @@ import companiesRoutes from './companies';
 import certificateTemplatesRoutes from './certificate-templates';
 import certificatesRoutes from './certificates';
 import subscriptionsRoutes from './subscriptions';
+import editorRoutes from './editor';
 
 const router = Router();
 
+router.use('/api/editor', editorRoutes);
 router.use('/auth', authRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/batches', batchRoutes);

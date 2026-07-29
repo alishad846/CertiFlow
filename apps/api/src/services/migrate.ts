@@ -280,6 +280,14 @@ const migrationStatements = [
      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()`,
   `ALTER TABLE IF EXISTS certificate_templates
      ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW()`,
+  `ALTER TABLE IF EXISTS certificate_templates
+     ADD COLUMN IF NOT EXISTS editor_document jsonb`,
+  `ALTER TABLE IF EXISTS certificate_templates
+     ADD COLUMN IF NOT EXISTS render_engine text NOT NULL DEFAULT 'legacy'`,
+  `ALTER TABLE IF EXISTS certificate_templates
+     DROP CONSTRAINT IF EXISTS certificate_templates_render_engine_chk`,
+  `ALTER TABLE IF EXISTS certificate_templates
+     ADD CONSTRAINT certificate_templates_render_engine_chk CHECK (render_engine IN ('legacy', 'editor'))`,
   `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'image'`,
   `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'pdf'`,
   `ALTER TABLE IF EXISTS batches
