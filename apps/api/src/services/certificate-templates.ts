@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { ensureDir, safeSegment } from './fs';
 import { getStockTemplate, stockImagePath } from './stock-templates';
+import { buildStockEditorDocument } from './stock-template-designs';
 
 export type CertificateFieldConfig = {
   field: string;
@@ -452,6 +453,7 @@ export async function createFromStockTemplate(params: {
   companyId: string;
   createdBy: string;
   stockId: string;
+  assetBase?: string;
 }) {
   const stock = getStockTemplate(params.stockId);
   const srcPath = stockImagePath(params.stockId);
@@ -469,14 +471,20 @@ export async function createFromStockTemplate(params: {
     isActive: false
   });
 
+  // Seed the editable editor document (border/lines/seal/text as real layers) when this stock
+  // design has one; otherwise leave it null so the editor seeds the flat background on canvas.
+  const design = params.assetBase
+    ? buildStockEditorDocument(params.stockId, params.assetBase)
+    : null;
+
   await pool.query(
     `UPDATE certificate_templates
        SET render_engine = 'editor',
-           editor_document = NULL,
+           editor_document = $4,
            updated_by = $3,
            updated_at = NOW()
      WHERE id = $1 AND company_id = $2`,
-    [created.id, params.companyId, params.createdBy]
+    [created.id, params.companyId, params.createdBy, design ? JSON.stringify(design) : null]
   );
 
   const finalTemplate = await getCertificateTemplateById(created.id, params.companyId);

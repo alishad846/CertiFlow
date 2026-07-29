@@ -367,7 +367,8 @@ router.post(
     const template = await createFromStockTemplate({
       companyId,
       createdBy: req.user!.id,
-      stockId
+      stockId,
+      assetBase: `${req.protocol}://${req.get('host')}`
     });
 
     res.status(201).json({ template });

@@ -132,7 +132,7 @@ export default function sortableContainer(
   
       this.container.addEventListener('keydown', this.handleKeyDown);
     }
-  
+
     componentWillUnmount() {
       if (this.helper && this.helper.parentNode) {
         this.helper.parentNode.removeChild(this.helper);
@@ -162,16 +162,6 @@ export default function sortableContainer(
         return el.sortableInfo != null;
       });
 
-      // console.log('handleStart - event.target:', event.target, 'node:', node, 'sortableInfo:', node?.sortableInfo);
-      // console.log('handleStart - checking parent chain for sortableInfo...');
-      let current = event.target;
-      let depth = 0;
-      while (current && depth < 10) {
-        // console.log(`  depth ${depth}:`, current, 'sortableInfo:', (current as any).sortableInfo);
-        current = current.parentNode;
-        depth++;
-      }
-
       if (
         node &&
         node.sortableInfo &&
@@ -180,18 +170,22 @@ export default function sortableContainer(
       ) {
         const {useDragHandle} = this.props;
         const {index, collection, disabled} = node.sortableInfo;
-  
+
         if (disabled) {
-          // console.log('handleStart - disabled');
           return;
         }
-  
+
         if (useDragHandle && !closest(event.target, isSortableHandle)) {
-          // console.log('handleStart - useDragHandle but not on handle');
           return;
         }
-  
-        // console.log('handleStart - setting active:', {collection, index});
+
+        // The manager's ref list can be emptied by a React 19 StrictMode registration race even
+        // though every node is still registered (sortableInfo intact); rebuild it from the live
+        // DOM so getActive() resolves and the drag can start.
+        if (!this.manager.refs[collection] || this.manager.refs[collection].length === 0) {
+          this.manager.rehydrateFromContainer(this.container, collection);
+        }
+
         this.manager.active = {collection, index};
   
         /*
@@ -270,7 +264,7 @@ export default function sortableContainer(
   
     handlePress = async (event) => {
       const active = this.manager.getActive();
-  
+
       if (active) {
         const {
           axis,

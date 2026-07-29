@@ -185,6 +185,42 @@ const TextContent: FC<{ onClose: () => void }> = ({ onClose }) => {
           style={{ width: '100%' }}
         />
       </div>
+      {Array.isArray(config.mergeFields) && config.mergeFields.length > 0 && (
+        <div css={{ marginBottom: 16 }}>
+          <p css={{ fontWeight: 600, margin: '0 0 8px' }}>
+            {t('sidebar.insertField', 'Insert field')}
+          </p>
+          <p css={{ fontSize: 12, color: '#71717a', margin: '0 0 10px' }}>
+            {t(
+              'sidebar.insertFieldHint',
+              'Adds a placeholder that fills in with each recipient at send time.'
+            )}
+          </p>
+          <div css={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {config.mergeFields.map((field) => (
+              <button
+                key={field}
+                type='button'
+                onClick={() => handleAddNewText(`{{${field}}}`, { width: 420, height: 48 }, 28)}
+                css={{
+                  border: '1px solid #d4d4d8',
+                  background: '#fff',
+                  borderRadius: 999,
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  color: '#27272a',
+                  ':hover': { background: '#f4f4f5', borderColor: '#a1a1aa' },
+                }}
+              >
+                {field
+                  .replace(/[_-]+/g, ' ')
+                  .replace(/^./, (c) => c.toUpperCase())}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div
         ref={scrollRef}
         css={{

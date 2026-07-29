@@ -150,6 +150,12 @@ export type EditorConfig = {
   imageKeywordSuggestions?: string;
   templateKeywordSuggestions?: string;
   /**
+   * Merge-field tokens the host app can offer for insertion (e.g. `recipient_name`, `issue_date`).
+   * Rendered as an "Insert field" section in the Text panel; picking one drops a `{{token}}` text
+   * layer that the headless renderer later replaces per recipient.
+   */
+  mergeFields?: string[];
+  /**
    * Translation messages object for i18n support.
    * Messages should be organized in a nested structure.
    * @example
