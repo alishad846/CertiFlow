@@ -15,23 +15,7 @@ import SyncedIcon from 'canva-editor/icons/SyncedIcon';
 import HeaderFileMenu from './sidebar/components/HeaderFileMenu';
 import SyncingIcon from 'canva-editor/icons/SyncingIcon';
 import useMobileDetect from 'canva-editor/hooks/useMobileDetect';
-import styled from '@emotion/styled';
-import ExportIcon from 'canva-editor/icons/ExportIcon';
 import { useTranslate } from 'canva-editor/contexts/TranslationContext';
-
-const Button = styled('button')`
-  display: flex;
-  align-items: center;
-  color: #fff;
-  line-height: 1;
-  background: rgb(255 255 255 / 7%);
-  padding: 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  &:hover {
-    background: rgb(255 255 255 / 15%);
-  }
-`;
 
 interface HeaderLayoutProps {
   logoUrl?: string;
@@ -163,27 +147,8 @@ const HeaderLayout: ForwardRefRenderFunction<
             <NextIcon />
           </EditorButton>
         </div>
-        {!isMobile && (
-          <>
-            <div
-              css={{
-                margin: '0 16px',
-              }}
-            >
-              <SettingDivider background="hsla(0,0%,100%,.15)" />
-            </div>
-            <Button
-              onClick={() => {
-                actions.fireDownloadPNGCmd(0);
-              }}
-            >
-              <div css={{ fontSize: 20 }}>
-                <ExportIcon />
-              </div>{' '}
-              <span css={{ marginRight: 4, marginLeft: 4 }}>{t('header.export', 'Export')}</span>
-            </Button>
-          </>
-        )}
+        {/* In-app export/download intentionally removed: certificates are only produced by the
+            server-side signing pipeline, never exported unsigned from the editor. */}
       </div>
     </div>
   );

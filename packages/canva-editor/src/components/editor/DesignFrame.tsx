@@ -30,9 +30,6 @@ import { isMobile } from 'react-device-detect';
 import PageSettings from 'canva-editor/utils/settings/PageSettings';
 import { dataMapping, pack, unpack } from 'canva-editor/utils/minifier';
 import useDebouncedEffect from 'canva-editor/hooks/useDebouncedEffect';
-import { domToPng } from 'modern-screenshot'
-import { slugify } from 'canva-editor/utils/slugify';
-import { jsPDF } from "jspdf";
 import { useTranslate } from 'canva-editor/contexts/TranslationContext';
 
 interface DesignFrameProps {
@@ -119,31 +116,7 @@ const DesignFrame: FC<DesignFrameProps> = ({ data, onChanges }) => {
     }, 16);
   }, [data, actions]);
 
-  useEffect(() => {
-    if (downloadPNGCmd === -1) return;
-    // Download active page
-    if (downloadPNGCmd === 1) {
-      handleDownloadPNG(activePage);
-      actions.fireDownloadPNGCmd(-1); // Reset
-      return;
-    }
-    // Download all pages
-    if (downloadPNGCmd === 0) {
-      pages.forEach((_, idx) => handleDownloadPNG(idx));
-      actions.fireDownloadPNGCmd(-1); // Reset
-      return;
-    }
-  }, [downloadPNGCmd]);
-
-  useEffect(() => {
-    console.log('downloadPDFCmd', downloadPDFCmd)
-    if (downloadPNGCmd === -1) return;
-    // Download all pages
-    if (downloadPDFCmd === 0) {
-      handleDownloadPDF();
-      return;
-    }
-  }, [downloadPDFCmd]);
+  // In-app PNG/PDF export removed — the download commands are never fired from the UI.
 
   useDebouncedEffect(
     () => {
@@ -244,55 +217,6 @@ const DesignFrame: FC<DesignFrameProps> = ({ data, onChanges }) => {
         block: 'center',
       });
     }, 16);
-  };
-  const handleDownloadPNG = async (pageIndex: number) => {
-    console.log('handleDownloadPNG', pageIndex)
-    const pageContentEl =
-      pageRef.current[pageIndex]?.querySelector('.page-content');
-    if (pageContentEl) {
-      try {
-        const dataUrl = await domToPng(pageContentEl as HTMLElement, {
-          width: pageSize.width,
-          height: pageSize.height
-        });
-        const link = document.createElement('a');
-        link.download = `design-id-page-${pageIndex + 1}.png`;
-        link.href = dataUrl;
-        link.click();
-      } catch (e) {
-        window.alert('Cannot download: ' + (e as Error).message);
-      }
-    }
-  };
-  const handleDownloadPDF = async () => {
-    const pageProcesses: Promise<string>[] = [];
-    pages.forEach((_, idx) => {
-      const pageContentEl =
-        pageRef.current[idx]?.querySelector('.page-content');
-      pageProcesses.push(domToPng(pageContentEl as HTMLElement, {
-        width: pageSize.width,
-        height: pageSize.height
-      }));
-    });
-    const dataUrls = await Promise.all(pageProcesses);
-    const doc = new jsPDF({
-      unit: "px",
-    });
-
-    dataUrls.forEach((dataUrl, idx) => {
-      doc.internal.pageSize.width =  pageSize.width;
-      doc.internal.pageSize.height = pageSize.height;
-      doc.addImage(dataUrl, 'PNG', 0, 0, pageSize.width, pageSize.height, 'p'+idx, 'SLOW');
-      if (idx !== dataUrls.length - 1) {
-        doc.addPage();
-        doc.internal.pageSize.width =  pageSize.width;
-        doc.internal.pageSize.height = pageSize.height;
-      }
-    });
-    const fileName = name ? slugify(name) : 'untitled-design';
-    doc.save(fileName + '.pdf');
-    console.log('handleDownloadPDF', fileName + '.pdf');
-    actions.fireDownloadPDFCmd(-1); // Reset
   };
   const { tmpSelected, onSelectStart } = useSelectLayer({
     frameRef: frameRef,

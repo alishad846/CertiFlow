@@ -467,6 +467,14 @@ router.put(
     if (req.user?.role !== 'super_admin' && template.companyId !== req.user?.companyId) {
       throw new AppError('Forbidden', 403);
     }
+    // Multi-tenant guardrail: a blocked company cannot author certificate designs, mirroring the
+    // company-active gate on the create/blank/from-stock routes. (Super admins are not company-scoped.)
+    if (req.user?.role !== 'super_admin') {
+      const company = await getCompanyAccess(template.companyId);
+      if (!company || company.status !== 'active') {
+        throw new AppError('Company is blocked', 403);
+      }
+    }
     if (!req.body || typeof req.body !== 'object' || !('editorDocument' in req.body)) {
       throw new AppError('editorDocument is required', 400);
     }

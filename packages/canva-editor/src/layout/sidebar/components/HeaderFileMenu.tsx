@@ -152,34 +152,7 @@ const HeaderFileMenu: FC<Props> = ({ designName, onRemove }) => {
         setOpenPreview(true);
       },
     },
-    {
-      label: t('header.export', 'Export'),
-      type: 'submenu',
-      icon: <ExportIcon />,
-      items: [
-        {
-          label: `${t('common.page', 'Page')} ${activePage + 1} ${t('header.asPNG', 'as PNG')}`,
-          type: 'normal',
-          action: () => {
-            actions.fireDownloadPNGCmd(1);
-          },
-        },
-        {
-          label: t('header.exportAllPagesAsPNG', 'All pages as PNG'),
-          type: 'normal',
-          action: () => {
-            actions.fireDownloadPNGCmd(0);
-          },
-        },
-        {
-          label: t('header.exportAllPagesAsPDF', 'All pages as PDF'),
-          type: 'normal',
-          action: () => {
-            actions.fireDownloadPDFCmd(0);
-          },
-        },
-      ],
-    },
+    // In-app PNG/PDF export removed: signed certificates are produced only by the server pipeline.
 
     { label: 'Divider', type: 'divider' },
     {
@@ -209,14 +182,7 @@ const HeaderFileMenu: FC<Props> = ({ designName, onRemove }) => {
         uploadRef.current?.click();
       },
     },
-    {
-      label: t('header.download', 'Download'),
-      type: 'normal',
-      icon: <DownloadIcon />,
-      action: () => {
-        downloadObjectAsJson('file', pack(query.serialize(), dataMapping)[0]);
-      },
-    },
+    // Raw design-JSON download removed alongside image export — designs stay server-side.
     {
       label: t('header.remove', 'Remove'),
       type: 'normal',
