@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -128,7 +128,7 @@ export default function BillingPage() {
         body: JSON.stringify({ transactionReference })
       });
       setTransactionReference('');
-      setMessage('Reference submitted. A super admin can now approve the top-up.');
+      setMessage('Reference submitted. A super admin can now approve the credit purchase.');
       await reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to submit reference');
@@ -206,7 +206,7 @@ export default function BillingPage() {
   };
 
   if (loading) {
-    return <Card>Loading billing...</Card>;
+    return <Card>Loading billing</Card>;
   }
 
   if (!user || !stats) {
@@ -217,36 +217,22 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
+      <Card>
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Billing</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-ink md:text-4xl">
+            <p className="eyebrow">Billing</p>
+            <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink">
               Buy credits with UPI and track payment requests.
             </h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+            <p className="mt-3 max-w-2xl text-base leading-7 text-ink-soft">
               Pick a plan, create a UPI payment link, submit your reference, and let the super admin approve the credits.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="blue">
-              <span className="inline-flex items-center gap-2">
-                <Smartphone className="h-4 w-4" />
-                Direct UPI
-              </span>
-            </Badge>
-            <Badge tone="green">
-              <span className="inline-flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Manual approval
-              </span>
-            </Badge>
-            {user.role === 'super_admin' ? (
-              <Button asChild variant="secondary">
-                <Link href="/discounts">Manage discounts</Link>
-              </Button>
-            ) : null}
-          </div>
+          {user.role === 'super_admin' ? (
+            <Button asChild variant="secondary">
+              <Link href="/discounts">Manage discounts</Link>
+            </Button>
+          ) : null}
         </div>
       </Card>
 
@@ -257,14 +243,16 @@ export default function BillingPage() {
         <StatCard label="Pending emails" value={stats.pendingEmails} hint="Still processing or sending" />
       </div>
 
-      {message ? <p className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{message}</p> : null}
+      {message ? (
+        <p className="rounded-2xl border border-[color:var(--color-border)] bg-paper/50 px-4 py-3 text-sm text-ink-soft">{message}</p>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr,0.9fr] xl:items-start">
-        <Card className="border-white/80">
+        <Card>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-slate-500">Pricing plans</p>
-              <h3 className="mt-1 text-2xl font-bold tracking-tight text-ink">Select a credit pack</h3>
+              <p className="eyebrow">Pricing plans</p>
+              <h3 className="mt-2 font-serif text-2xl text-ink">Select a credit pack</h3>
             </div>
             <Button variant="secondary" onClick={reload} type="button">
               <RefreshCw className="mr-2 h-4 w-4" />
@@ -279,29 +267,31 @@ export default function BillingPage() {
                 type="button"
                 onClick={() => setSelectedPlan(plan.key)}
                 className={`rounded-[24px] border p-5 text-left transition ${
-                  selectedPlan === plan.key ? 'border-accent-400 bg-accent-50 shadow-[0_16px_40px_rgba(42,141,240,0.12)]' : 'border-slate-200 bg-white hover:border-slate-300'
+                  selectedPlan === plan.key
+                    ? 'border-bronze bg-bronze/5 shadow-[0_16px_40px_-24px_rgba(148,112,63,0.5)]'
+                    : 'border-[color:var(--color-border)] bg-paper-bright hover:border-bronze/40'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-500">{plan.name}</p>
-                    <div className="mt-2 text-2xl font-bold tracking-tight">Rs. {plan.amountInr.toLocaleString('en-IN')}</div>
+                    <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-ink-faint">{plan.name}</p>
+                    <div className="mt-2 font-serif text-2xl text-ink">Rs. {plan.amountInr.toLocaleString('en-IN')}</div>
                   </div>
                   {plan.recommended ? <Badge tone="blue">Best value</Badge> : null}
                 </div>
-                <p className="mt-2 text-sm font-semibold text-accent-700">{plan.credits.toLocaleString('en-IN')} credits</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{plan.description}</p>
+                <p className="mt-2 text-sm font-medium text-bronze-deep">{plan.credits.toLocaleString('en-IN')} credits</p>
+                <p className="mt-3 text-sm leading-6 text-ink-soft">{plan.description}</p>
               </button>
             ))}
           </div>
 
           {user.role === 'super_admin' ? (
-            <div className="mt-8 rounded-[28px] border border-amber-200 bg-amber-50/70 p-5">
+            <div className="mt-8 rounded-[28px] border border-bronze/25 bg-bronze/5 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="max-w-2xl">
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-900/70">Pricing admin</p>
-                  <h4 className="mt-1 text-2xl font-bold tracking-tight text-ink">Change credit pack pricing</h4>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-bronze-deep">Pricing admin</p>
+                  <h4 className="mt-2 font-serif text-2xl text-ink">Change credit pack pricing</h4>
+                  <p className="mt-2 text-sm leading-6 text-ink-soft">
                     Edit the live plan amounts, credits, and features used on the public pricing page and in UPI checkout.
                   </p>
                 </div>
@@ -310,23 +300,27 @@ export default function BillingPage() {
                     Reset changes
                   </Button>
                   <Button type="button" onClick={() => void handleSavePricing()} disabled={pricingSaving}>
-                    {pricingSaving ? 'Saving pricing...' : 'Save pricing'}
+                    {pricingSaving ? 'Saving pricing' : 'Save pricing'}
                   </Button>
                 </div>
               </div>
 
-              {pricingMessage ? <p className="mt-4 rounded-2xl border border-white/70 bg-white px-4 py-3 text-sm text-slate-700">{pricingMessage}</p> : null}
+              {pricingMessage ? (
+                <p className="mt-4 rounded-2xl border border-[color:var(--color-border)] bg-paper-bright px-4 py-3 text-sm text-ink-soft">
+                  {pricingMessage}
+                </p>
+              ) : null}
 
               <div className="mt-5 grid gap-4 xl:grid-cols-3">
                 {draftPlans.map((plan) => (
-                  <div key={plan.key} className="rounded-[24px] border border-slate-200 bg-white p-4">
+                  <div key={plan.key} className="rounded-[24px] border border-[color:var(--color-border)] bg-paper-bright p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{plan.key}</p>
-                        <label className="mt-2 block text-sm font-medium text-slate-700">Plan name</label>
+                        <p className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-ink-faint">{plan.key}</p>
+                        <label className="mt-2 block text-sm font-medium text-ink-soft">Plan name</label>
                         <Input value={plan.name} onChange={(event) => updateDraftPlan(plan.key, { name: event.target.value })} className="mt-2" />
                       </div>
-                      <label className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                      <label className="flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-paper/50 px-3 py-2 text-xs font-medium text-ink-soft">
                         <input
                           type="checkbox"
                           checked={Boolean(plan.recommended)}
@@ -338,7 +332,7 @@ export default function BillingPage() {
 
                     <div className="mt-4 grid gap-3">
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Amount INR</label>
+                        <label className="mb-2 block text-sm font-medium text-ink-soft">Amount INR</label>
                         <Input
                           type="number"
                           min="0"
@@ -348,7 +342,7 @@ export default function BillingPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Credits</label>
+                        <label className="mb-2 block text-sm font-medium text-ink-soft">Credits</label>
                         <Input
                           type="number"
                           min="1"
@@ -358,16 +352,16 @@ export default function BillingPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Description</label>
+                        <label className="mb-2 block text-sm font-medium text-ink-soft">Description</label>
                         <textarea
                           value={plan.description}
                           onChange={(event) => updateDraftPlan(plan.key, { description: event.target.value })}
                           rows={3}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-accent-400 focus:ring-4 focus:ring-accent-100"
+                          className="w-full rounded-2xl border border-[color:var(--color-border)] bg-paper-bright px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-bronze focus:ring-4 focus:ring-bronze/15"
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Features, one per line</label>
+                        <label className="mb-2 block text-sm font-medium text-ink-soft">Features, one per line</label>
                         <textarea
                           value={plan.features.join('\n')}
                           onChange={(event) =>
@@ -379,7 +373,7 @@ export default function BillingPage() {
                             })
                           }
                           rows={4}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-accent-400 focus:ring-4 focus:ring-accent-100"
+                          className="w-full rounded-2xl border border-[color:var(--color-border)] bg-paper-bright px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-bronze focus:ring-4 focus:ring-bronze/15"
                         />
                       </div>
                     </div>
@@ -391,18 +385,18 @@ export default function BillingPage() {
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Your name</label>
+              <label className="mb-2 block text-sm font-medium text-ink-soft">Your name</label>
               <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Shad Ali" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Your email</label>
+              <label className="mb-2 block text-sm font-medium text-ink-soft">Your email</label>
               <Input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="you@company.com" />
             </div>
           </div>
 
           {user.role === 'super_admin' ? (
             <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Company ID</label>
+              <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID</label>
               <Input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="Target company UUID" />
             </div>
           ) : null}
@@ -417,28 +411,28 @@ export default function BillingPage() {
           </div>
 
           {activePayment ? (
-            <div className="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-500">Active payment request</p>
-                    <h4 className="mt-1 text-xl font-bold text-ink">{activePayment.planName}</h4>
-                    <p className="mt-2 text-sm text-slate-600">
-                      Pay <span className="font-semibold">Rs. {Number(activePayment.amountInr).toLocaleString('en-IN')}</span> for{' '}
-                      <span className="font-semibold">{activePayment.credits.toLocaleString('en-IN')} credits</span>.
+            <div className="mt-6 rounded-[24px] border border-[color:var(--color-border)] bg-paper/50 p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="eyebrow">Active payment request</p>
+                  <h4 className="mt-2 font-serif text-xl text-ink">{activePayment.planName}</h4>
+                  <p className="mt-2 text-sm text-ink-soft">
+                    Pay <span className="font-medium text-ink">Rs. {Number(activePayment.amountInr).toLocaleString('en-IN')}</span> for{' '}
+                    <span className="font-medium text-ink">{activePayment.credits.toLocaleString('en-IN')} credits</span>.
+                  </p>
+                  {activePayment.discountPercent > 0 ? (
+                    <p className="mt-2 text-sm text-bronze-deep">
+                      Includes {activePayment.discountPercent}% discount on a base amount of Rs.{' '}
+                      {Number(activePayment.baseAmountInr).toLocaleString('en-IN')}.
                     </p>
-                    {activePayment.discountPercent > 0 ? (
-                      <p className="mt-2 text-sm text-accent-700">
-                        Includes {activePayment.discountPercent}% discount on a base amount of Rs.{' '}
-                        {Number(activePayment.baseAmountInr).toLocaleString('en-IN')}.
-                      </p>
-                    ) : null}
-                  </div>
-                  <Badge tone="amber">{activePayment.status}</Badge>
+                  ) : null}
                 </div>
+                <Badge tone="amber">{activePayment.status}</Badge>
+              </div>
 
-              <div className="mt-4 rounded-[20px] bg-white p-4">
-                <p className="text-sm font-semibold text-slate-500">UPI link</p>
-                <p className="mt-2 break-all rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-700">{activePayment.upiLink}</p>
+              <div className="mt-4 rounded-[20px] border border-[color:var(--color-border)] bg-paper-bright p-4">
+                <p className="eyebrow">UPI link</p>
+                <p className="mt-2 break-all rounded-2xl bg-paper/50 px-3 py-3 text-sm text-ink-soft">{activePayment.upiLink}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" variant="secondary" onClick={() => copyToClipboard(activePayment.upiLink)}>
                     <Copy className="mr-2 h-4 w-4" />
@@ -454,7 +448,7 @@ export default function BillingPage() {
               </div>
 
               <div className="mt-4">
-                <label className="mb-2 block text-sm font-medium text-slate-700">Transaction reference / UTR</label>
+                <label className="mb-2 block text-sm font-medium text-ink-soft">Transaction reference (UTR)</label>
                 <div className="flex flex-col gap-3 md:flex-row">
                   <Input
                     value={transactionReference}
@@ -467,36 +461,36 @@ export default function BillingPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-                <CheckCircle2 className="h-4 w-4 text-accent-700" />
+              <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
+                <CheckCircle2 className="h-4 w-4 text-bronze-deep" />
                 Once submitted, a super admin can approve and the credits will be added to the company account.
               </div>
             </div>
           ) : null}
         </Card>
 
-        <Card className="self-start border-white/80">
+        <Card className="self-start">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-slate-500">Payment requests</p>
-              <h3 className="mt-1 text-2xl font-bold tracking-tight text-ink">Track approvals</h3>
+              <p className="eyebrow">Payment requests</p>
+              <h3 className="mt-2 font-serif text-2xl text-ink">Track approvals</h3>
             </div>
             <Badge tone="blue">{payments.length} records</Badge>
           </div>
 
           <div className="mt-6 space-y-3">
             {payments.length === 0 ? (
-              <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
+              <div className="rounded-[24px] border border-[color:var(--color-border)] bg-paper/50 p-5 text-sm text-ink-soft">
                 No UPI requests yet. Create one to see it here.
               </div>
             ) : (
               payments.map((payment) => (
-                <div key={payment.id} className="rounded-[24px] border border-slate-200 bg-white p-4">
+                <div key={payment.id} className="rounded-[24px] border border-[color:var(--color-border)] bg-paper-bright p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-ink">{payment.planName}</p>
-                      <p className="mt-1 text-sm text-slate-500">{payment.companyName}</p>
-                      <p className="mt-2 text-sm text-slate-600">
+                      <p className="font-serif text-lg text-ink">{payment.planName}</p>
+                      <p className="mt-1 text-sm text-ink-soft">{payment.companyName}</p>
+                      <p className="mt-2 text-sm text-ink-soft">
                         Rs. {Number(payment.amountInr).toLocaleString('en-IN')} for {payment.credits.toLocaleString('en-IN')} credits
                       </p>
                     </div>
@@ -505,7 +499,7 @@ export default function BillingPage() {
                     </Badge>
                   </div>
 
-                  <div className="mt-4 grid gap-3 text-sm text-slate-500">
+                  <div className="mt-4 grid gap-3 text-sm text-ink-soft">
                     <div className="flex items-center justify-between gap-3">
                       <span>Base amount</span>
                       <span className="font-medium text-ink">Rs. {Number(payment.baseAmountInr).toLocaleString('en-IN')}</span>
@@ -518,7 +512,7 @@ export default function BillingPage() {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>Reference</span>
-                      <span className="font-medium text-ink">{payment.transactionReference || '-'}</span>
+                      <span className="font-medium text-ink">{payment.transactionReference || '—'}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>Created</span>

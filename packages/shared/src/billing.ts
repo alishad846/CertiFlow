@@ -60,7 +60,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     key: 'growth',
     name: 'Growth',
-    description: 'Best for regular certificate and offer-letter batches.',
+    description: 'Best for regular certificate and offer letter batches.',
     credits: 2000,
     amountInr: 4999,
     recommended: true,
@@ -72,7 +72,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'For larger operations that need more credits upfront.',
     credits: 5000,
     amountInr: 9999,
-    features: ['5,000 credits included', 'Higher-volume sending', 'Ideal for multi-team usage']
+    features: ['5,000 credits included', 'Higher volume sending', 'Ideal for teams sending at scale']
   }
 ];
 

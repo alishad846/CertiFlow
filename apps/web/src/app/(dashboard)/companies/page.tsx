@@ -28,7 +28,7 @@ type CompanyPermissionsDraft = {
 
 const permissionLabels: Array<{ key: keyof CompanyPermissionsDraft; title: string; description: string }> = [
   { key: 'canCreateBatches', title: 'Batch uploads', description: 'Allow the company admin to create generation batches.' },
-  { key: 'canRequestUpi', title: 'Billing requests', description: 'Allow UPI top-up requests from the billing screen.' },
+  { key: 'canRequestUpi', title: 'Billing requests', description: 'Allow credit purchase requests from the billing screen.' },
   { key: 'canViewReports', title: 'Reports access', description: 'Allow access to dashboard stats and logs.' }
 ];
 
@@ -203,50 +203,46 @@ export default function CompaniesPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-slate-200/70 bg-slate-950 p-0 text-white">
-        <div className="bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.3),transparent_32%),radial-gradient(circle_at_left,rgba(255,255,255,0.12),transparent_24%)] px-7 py-8 md:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="max-w-2xl">
-              <Badge tone="blue" className="bg-white/10 text-white">
-                Super admin control
-              </Badge>
-              <h1 className="mt-4 text-4xl font-bold tracking-tight">Companies, permissions, and access in one place.</h1>
-              <p className="mt-3 text-sm leading-7 text-slate-300">
-                Block a company, fine-tune permissions, or delete it permanently. This screen keeps the control flow simple
-                for fast admin operations.
-              </p>
-            </div>
+      <div className="paper-ink rounded-[30px] px-7 py-8 md:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="eyebrow text-bronze-bright">Super admin control</p>
+            <h1 className="mt-4 font-serif text-4xl tracking-tight text-paper-bright">Companies, permissions, and access in one place.</h1>
+            <p className="mt-3 text-sm leading-7 text-mist">
+              Block a company, adjust permissions, or delete it permanently. This screen keeps the control flow simple
+              for fast admin operations.
+            </p>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Companies</p>
-                <p className="mt-2 text-2xl font-bold">{companies.length}</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Blocked</p>
-                <p className="mt-2 text-2xl font-bold">{blockedCount}</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Credits</p>
-                <p className="mt-2 text-2xl font-bold">{totalCredits.toLocaleString('en-IN')}</p>
-              </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-3xl border border-mist/20 bg-paper-bright/5 px-4 py-3">
+              <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-mist">Companies</p>
+              <p className="mt-2 font-serif text-2xl text-paper-bright">{companies.length}</p>
+            </div>
+            <div className="rounded-3xl border border-mist/20 bg-paper-bright/5 px-4 py-3">
+              <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-mist">Blocked</p>
+              <p className="mt-2 font-serif text-2xl text-paper-bright">{blockedCount}</p>
+            </div>
+            <div className="rounded-3xl border border-mist/20 bg-paper-bright/5 px-4 py-3">
+              <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-mist">Credits</p>
+              <p className="mt-2 font-serif text-2xl text-paper-bright">{totalCredits.toLocaleString('en-IN')}</p>
             </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       {message ? (
-        <div className="rounded-3xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm font-medium text-sky-800">
+        <div className="rounded-3xl border border-[color:var(--color-border)] bg-paper/50 px-5 py-4 text-sm font-medium text-ink-soft">
           {message}
         </div>
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="p-6">
+        <Card>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-500">Company list</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-ink">Pick a company to manage</h2>
+              <p className="eyebrow">Company list</p>
+              <h2 className="mt-2 font-serif text-2xl text-ink">Pick a company to manage</h2>
             </div>
             <Button variant="secondary" onClick={() => void loadCompanies()} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -256,11 +252,11 @@ export default function CompaniesPage() {
 
           <div className="mt-5 space-y-3">
             {loading ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                Loading companies...
+              <div className="rounded-3xl border border-dashed border-[color:var(--color-border)] bg-paper/40 p-6 text-sm text-ink-soft">
+                Loading companies
               </div>
             ) : companies.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+              <div className="rounded-3xl border border-dashed border-[color:var(--color-border)] bg-paper/40 p-6 text-sm text-ink-soft">
                 No companies found.
               </div>
             ) : (
@@ -272,24 +268,24 @@ export default function CompaniesPage() {
                     onClick={() => void updateSelectedCompany(company.companyId)}
                     className={`w-full rounded-3xl border p-4 text-left transition ${
                       active
-                        ? 'border-slate-950 bg-slate-950 text-white shadow-[0_18px_40px_rgba(15,23,42,0.2)]'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
+                        ? 'border-ink bg-ink text-paper-bright shadow-[0_18px_40px_-24px_rgba(11,27,58,0.8)]'
+                        : 'border-[color:var(--color-border)] bg-paper-bright hover:border-bronze/40'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <Building2 className={`h-4 w-4 ${active ? 'text-sky-200' : 'text-slate-500'}`} />
-                          <p className="font-semibold">{company.companyName}</p>
+                          <Building2 className={`h-4 w-4 ${active ? 'text-mist' : 'text-ink-faint'}`} />
+                          <p className="font-serif text-lg">{company.companyName}</p>
                         </div>
-                        <p className={`mt-1 text-sm ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                        <p className={`mt-1 text-sm ${active ? 'text-mist' : 'text-ink-soft'}`}>
                           {company.creditsRemaining.toLocaleString('en-IN')} credits · {company.userCount} admins · {company.batchCount} batches
                         </p>
                       </div>
                       <Badge tone={statusTone(company.status)}>{company.status}</Badge>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                       <Badge tone={company.canCreateBatches ? 'green' : 'slate'}>Uploads {company.canCreateBatches ? 'on' : 'off'}</Badge>
                       <Badge tone={company.canRequestUpi ? 'blue' : 'slate'}>Billing {company.canRequestUpi ? 'on' : 'off'}</Badge>
                       <Badge tone={company.canViewReports ? 'amber' : 'slate'}>Reports {company.canViewReports ? 'on' : 'off'}</Badge>
@@ -301,55 +297,55 @@ export default function CompaniesPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card>
           {selectedCompany ? (
             <>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <UserCog className="h-5 w-5 text-slate-500" />
-                    <p className="text-sm font-semibold text-slate-500">Selected company</p>
+                    <UserCog className="h-4 w-4 text-ink-faint" />
+                    <p className="eyebrow">Selected company</p>
                   </div>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-ink">{selectedCompany.companyName}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    UUID: <span className="font-mono text-slate-700">{selectedCompany.companyId}</span>
+                  <h2 className="mt-2 font-serif text-3xl text-ink">{selectedCompany.companyName}</h2>
+                  <p className="mt-2 text-sm leading-6 text-ink-soft">
+                    UUID: <span className="font-mono text-ink-soft">{selectedCompany.companyId}</span>
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   <Badge tone={statusTone(selectedCompany.status)}>{selectedCompany.status}</Badge>
                   <Badge tone="blue">{selectedCompany.creditsRemaining.toLocaleString('en-IN')} credits</Badge>
                 </div>
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Admins</p>
-                  <p className="mt-2 text-2xl font-bold text-ink">{selectedCompany.userCount}</p>
+                <div className="rounded-3xl border border-[color:var(--color-border)] bg-paper/40 p-4">
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-ink-faint">Admins</p>
+                  <p className="mt-2 font-serif text-2xl text-ink">{selectedCompany.userCount}</p>
                 </div>
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Batches</p>
-                  <p className="mt-2 text-2xl font-bold text-ink">{selectedCompany.batchCount}</p>
+                <div className="rounded-3xl border border-[color:var(--color-border)] bg-paper/40 p-4">
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-ink-faint">Batches</p>
+                  <p className="mt-2 font-serif text-2xl text-ink">{selectedCompany.batchCount}</p>
                 </div>
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Payments</p>
-                  <p className="mt-2 text-2xl font-bold text-ink">{selectedCompany.paymentCount}</p>
+                <div className="rounded-3xl border border-[color:var(--color-border)] bg-paper/40 p-4">
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.2em] text-ink-faint">Payments</p>
+                  <p className="mt-2 font-serif text-2xl text-ink">{selectedCompany.paymentCount}</p>
                 </div>
               </div>
 
-              <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
+              <div className="mt-6 rounded-3xl border border-[color:var(--color-border)] bg-paper-bright p-5">
                 <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-slate-500" />
-                  <p className="text-sm font-semibold text-slate-700">Access controls</p>
+                  <ShieldAlert className="h-4 w-4 text-ink-faint" />
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-soft">Access controls</p>
                 </div>
 
                 <div className="mt-4 space-y-3">
                   {permissionLabels.map((item) => {
                     const enabled = draft[item.key];
                     return (
-                      <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
+                      <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl border border-[color:var(--color-border)] px-4 py-3">
                         <div>
-                          <p className="font-semibold text-ink">{item.title}</p>
-                          <p className="text-sm text-slate-500">{item.description}</p>
+                          <p className="font-serif text-base text-ink">{item.title}</p>
+                          <p className="text-sm text-ink-soft">{item.description}</p>
                         </div>
                         <Button
                           variant={enabled ? 'primary' : 'secondary'}
@@ -363,8 +359,8 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
-              <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
-                <p className="text-sm font-semibold text-slate-700">Block reason</p>
+              <div className="mt-6 rounded-3xl border border-[color:var(--color-border)] bg-paper-bright p-5">
+                <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-soft">Block reason</p>
                 <div className="mt-3">
                   <Input
                     value={reason}
@@ -372,8 +368,8 @@ export default function CompaniesPage() {
                     placeholder="Optional reason for blocking access"
                   />
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-500">
-                  Blocking a company immediately revokes its sessions. Delete permanently removes the company and its data.
+                <p className="mt-3 text-sm leading-6 text-ink-soft">
+                  Blocking a company immediately revokes its sessions. Deleting permanently removes the company and its data.
                 </p>
               </div>
 
@@ -399,37 +395,42 @@ export default function CompaniesPage() {
                     Unblock company
                   </Button>
                 )}
-                <Button variant="ghost" onClick={() => void deleteCompany()} disabled={saving} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                <Button
+                  variant="ghost"
+                  onClick={() => void deleteCompany()}
+                  disabled={saving}
+                  className="text-[#a3412e] hover:bg-[#a3412e]/8 hover:text-[#8f3325]"
+                >
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                   Delete company
                 </Button>
               </div>
             </>
           ) : (
-            <div className="flex min-h-[32rem] items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 text-slate-500">
+            <div className="flex min-h-[32rem] items-center justify-center rounded-[28px] border border-dashed border-[color:var(--color-border)] bg-paper/40 text-ink-soft">
               Select a company to manage permissions and access.
             </div>
           )}
         </Card>
       </div>
 
-      <Card className="bg-slate-950 p-6 text-white">
+      <div className="paper-ink rounded-[30px] p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-200">Easy mode</p>
-            <h3 className="mt-2 text-2xl font-bold tracking-tight">Everything important is on one screen.</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-300">
+            <p className="eyebrow text-bronze-bright">Easy mode</p>
+            <h3 className="mt-2 font-serif text-2xl text-paper-bright">Everything important is on one screen.</h3>
+            <p className="mt-2 text-sm leading-7 text-mist">
               Super admin can block, restore, change permissions, or delete companies without hunting through multiple menus.
             </p>
           </div>
-          <Button asChild>
+          <Button asChild variant="bronze">
             <Link href="/discounts">
               Manage discounts
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

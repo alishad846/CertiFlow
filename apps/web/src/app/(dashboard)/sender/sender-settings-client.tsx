@@ -26,6 +26,8 @@ type EmailSettingsResponse = {
     smtpAllowInvalidCerts: boolean | null;
     smtpUser: string | null;
     enabled: boolean | null;
+    claimSubject: string | null;
+    claimMessage: string | null;
     updatedAt: string | null;
   } | null;
 };
@@ -70,6 +72,8 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
   const [smtpAllowInvalidCerts, setSmtpAllowInvalidCerts] = useState(false);
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
+  const [claimSubject, setClaimSubject] = useState('');
+  const [claimMessage, setClaimMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -123,6 +127,8 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
       setSmtpSecure(normalizeSmtpSecure(nextSmtpPort, Boolean(response.settings?.smtpSecure)));
       setSmtpAllowInvalidCerts(Boolean(response.settings?.smtpAllowInvalidCerts));
       setSmtpUser(response.settings?.smtpUser ?? '');
+      setClaimSubject(response.settings?.claimSubject ?? '');
+      setClaimMessage(response.settings?.claimMessage ?? '');
       setLastUpdated(response.settings?.updatedAt ?? null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load email settings');
@@ -207,11 +213,13 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
           smtpAllowInvalidCerts,
           smtpUser: smtpUser.trim(),
           smtpPass: smtpPass.trim() || undefined,
+          claimSubject: claimSubject.trim() || undefined,
+          claimMessage: claimMessage.trim() || undefined,
           enabled: isConfigComplete
         })
       });
       setMessage(isConfigComplete ? 'Email sender settings saved successfully and enabled automatically.' : 'Email sender settings saved successfully, but it is still incomplete.');
-      setSmtpPass(''); 
+      setSmtpPass('');
       await loadSettings(resolvedCompanyId);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to save email sender settings');
@@ -241,15 +249,15 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
   };
 
   if (loading) {
-    return <Card className="p-6">Loading sender settings...</Card>;
+    return <Card>Loading sender settings</Card>;
   }
 
   return (
     <div className="space-y-6">
-      <Card className="border-white/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(42,141,240,0.05))]">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Email sender</p>
+      <Card>
+        <p className="eyebrow">Email sender</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <h1 className="text-4xl font-bold tracking-tight text-ink md:text-5xl">{senderName || companyName || 'Company sender'}</h1>
+          <h1 className="font-serif text-4xl tracking-tight text-ink md:text-5xl">{senderName || companyName || 'Company sender'}</h1>
           <Badge
             tone={senderStatus === 'ready' ? 'green' : senderStatus === 'disabled' ? 'amber' : 'red'}
             className="self-center"
@@ -257,11 +265,11 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
             {senderStatus === 'ready' ? 'Ready to send' : senderStatus === 'disabled' ? 'Sender disabled' : 'Not configured'}
           </Badge>
         </div>
-        {companyName ? <p className="mt-2 text-sm font-medium text-slate-500">Company: {companyName}</p> : null}
-        <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+        {companyName ? <p className="mt-2 text-sm font-medium text-ink-soft">Company: {companyName}</p> : null}
+        <p className="mt-3 max-w-3xl text-base leading-7 text-ink-soft">
           Configure sender details for work emails, subscription notices, and batch notifications.
         </p>
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="mt-3 text-sm text-ink-faint">
           {senderStatus === 'ready'
             ? 'This company is configured and can send emails.'
             : senderStatus === 'disabled'
@@ -270,31 +278,71 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
         </p>
       </Card>
 
-      <Card className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900">Quick setup</h2>
-        <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+      <div className="rounded-[28px] border border-[color:var(--color-border)] bg-paper/50 p-6">
+        <h2 className="font-serif text-xl text-ink">Quick setup</h2>
+        <div className="mt-4 space-y-3 text-sm leading-6 text-ink-soft">
           <p>Use this form to save the email account that CertiFlow will send from for your company.</p>
           <ul className="list-disc space-y-2 pl-5">
-            <li><strong>Sender name</strong> is the display name shown to employees and recipients.</li>
-            <li><strong>Sender email</strong> should be the company mailbox you want emails to come from.</li>
-            <li><strong>SMTP host/port/user/password</strong> are the credentials for that mailbox.</li>
+            <li><strong className="text-ink">Sender name</strong> is the display name shown to employees and recipients.</li>
+            <li><strong className="text-ink">Sender email</strong> should be the company mailbox you want emails to come from.</li>
+            <li><strong className="text-ink">SMTP host, port, user, and password</strong> are the credentials for that mailbox.</li>
           </ul>
-          <p>After saving, create a test batch and send it. The recipient should see your company email, not <strong>alishad846@gmail.com</strong>.</p>
+          <p>After saving, create a test batch and send it. The recipient should see <strong className="text-ink">your company email</strong> as the sender, not the platform&rsquo;s default sending address.</p>
+        </div>
+      </div>
+
+      <Card>
+        <p className="eyebrow">Certificate claim email</p>
+        <h2 className="mt-2 font-serif text-2xl text-ink">The message recipients receive</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-soft">
+          For certificate batches, recipients get this heartwarming note with a secure <strong className="text-ink">Claim</strong>{' '}
+          button (the PDF is not attached — they verify their email, then download). You can use placeholders like{' '}
+          <span className="font-mono text-ink">{'{{name}}'}</span> and <span className="font-mono text-ink">{'{{course}}'}</span>.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-ink-soft">Email subject</span>
+            <Input
+              value={claimSubject}
+              onChange={(event) => setClaimSubject(event.target.value)}
+              placeholder="Your certificate from {{company}} is ready"
+            />
+          </label>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-ink-soft">Message</span>
+            <textarea
+              value={claimMessage}
+              onChange={(event) => setClaimMessage(event.target.value)}
+              rows={5}
+              placeholder="Congratulations {{name}}! We're proud to award you this certificate. Click below to claim and download it."
+              className="w-full rounded-2xl border border-[color:var(--color-border)] bg-paper-bright px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-bronze focus:ring-4 focus:ring-bronze/15"
+            />
+          </label>
+          <p className="text-xs leading-5 text-ink-faint">
+            Leave blank to use a sensible default. The Claim button and secure link are added automatically.
+          </p>
+          <Button onClick={() => void saveSettings()} disabled={saving || (role === 'super_admin' && !companyId.trim())}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Save claim email
+          </Button>
         </div>
       </Card>
 
       {message ? (
         <div
           className={`rounded-3xl px-5 py-4 text-sm font-medium ${
-            hasErrorHelp ? 'border border-amber-200 bg-amber-50 text-amber-900' : 'border border-sky-200 bg-sky-50 text-sky-800'
+            hasErrorHelp
+              ? 'border border-bronze/25 bg-bronze/8 text-bronze-deep'
+              : 'border border-royal/20 bg-royal/8 text-royal'
           }`}
         >
           <p>{message}</p>
           {smtpHelp ? (
-            <div className="mt-4 rounded-2xl border border-amber-200/80 bg-white/90 p-4 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">{smtpHelp.title}</p>
+            <div className="mt-4 rounded-2xl border border-[color:var(--color-border)] bg-paper-bright p-4 text-sm text-ink-soft">
+              <p className="font-serif text-base text-ink">{smtpHelp.title}</p>
               <p className="mt-1 leading-6">{smtpHelp.description}</p>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-600">
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-ink-soft">
                 {smtpHelp.fixes.map((fix) => (
                   <li key={fix}>{fix}</li>
                 ))}
@@ -304,23 +352,23 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
         </div>
       ) : null}
 
-      <Card className="p-6">
+      <Card>
         <div className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-slate-500" />
-          <h2 className="text-2xl font-bold tracking-tight text-ink">Sender details</h2>
+          <Mail className="h-4 w-4 text-ink-faint" />
+          <h2 className="font-serif text-2xl text-ink">Sender details</h2>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">Sender name</span>
+            <span className="text-sm font-medium text-ink-soft">Sender name</span>
             <Input value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Google HR" />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">Sender email</span>
-            <Input value={senderEmail} onChange={(event) => setSenderEmail(event.target.value)} placeholder="no-reply@company.com" />
+            <span className="text-sm font-medium text-ink-soft">Sender email</span>
+            <Input value={senderEmail} onChange={(event) => setSenderEmail(event.target.value)} placeholder="noreply@company.com" />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">SMTP host</span>
+            <span className="text-sm font-medium text-ink-soft">SMTP host</span>
             <Input
               value={smtpHost}
               onChange={(event) => {
@@ -334,10 +382,10 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
               }}
               placeholder="smtp.gmail.com"
             />
-            {preset ? <p className="text-xs text-slate-500">{preset.provider}: {preset.note}</p> : null}
+            {preset ? <p className="text-xs text-ink-faint">{preset.provider}: {preset.note}</p> : null}
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">SMTP port</span>
+            <span className="text-sm font-medium text-ink-soft">SMTP port</span>
             <Input
               type="number"
               min="1"
@@ -350,42 +398,42 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
               placeholder="587"
             />
           </label>
-          <label className="space-y-2 flex flex-col">
-            <span className="text-sm font-semibold text-slate-700">SMTP secure</span>
+          <label className="flex flex-col space-y-2">
+            <span className="text-sm font-medium text-ink-soft">SMTP secure</span>
             <div className="flex items-center gap-3">
               <input
                 id="smtpSecure"
                 type="checkbox"
                 checked={smtpSecure}
                 onChange={(event) => setSmtpSecure(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                className="h-4 w-4 rounded border-[color:var(--color-border)] text-bronze focus:ring-bronze"
               />
-              <label htmlFor="smtpSecure" className="text-sm text-slate-600">
+              <label htmlFor="smtpSecure" className="text-sm text-ink-soft">
                 Use TLS/SSL only for port 465. For port 587, keep this off and use STARTTLS.
               </label>
             </div>
           </label>
-          <label className="space-y-2 flex flex-col md:col-span-2">
-            <span className="text-sm font-semibold text-slate-700">Allow invalid certs</span>
+          <label className="flex flex-col space-y-2 md:col-span-2">
+            <span className="text-sm font-medium text-ink-soft">Allow invalid certs</span>
             <div className="flex items-center gap-3">
               <input
                 id="smtpAllowInvalidCerts"
                 type="checkbox"
                 checked={smtpAllowInvalidCerts}
                 onChange={(event) => setSmtpAllowInvalidCerts(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                className="h-4 w-4 rounded border-[color:var(--color-border)] text-bronze focus:ring-bronze"
               />
-              <label htmlFor="smtpAllowInvalidCerts" className="text-sm text-slate-600">
-                Enable only if your SMTP server uses a self-signed or internally issued certificate.
+              <label htmlFor="smtpAllowInvalidCerts" className="text-sm text-ink-soft">
+                Enable only if your SMTP server uses a self signed or internally issued certificate.
               </label>
             </div>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">SMTP username</span>
+            <span className="text-sm font-medium text-ink-soft">SMTP username</span>
             <Input value={smtpUser} onChange={(event) => setSmtpUser(event.target.value)} placeholder="sender@company.com" />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-700">SMTP password</span>
+            <span className="text-sm font-medium text-ink-soft">SMTP password</span>
             <Input
               type="password"
               value={smtpPass}
@@ -408,7 +456,7 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
             Test SMTP
           </Button>
         </div>
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="mt-3 text-sm text-ink-faint">
           Current status: {senderStatus === 'ready' ? 'ready to send' : senderStatus === 'disabled' ? 'disabled until required fields are filled' : 'not configured'}
         </p>
       </Card>

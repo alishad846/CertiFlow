@@ -1,32 +1,217 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-:root {
-  color-scheme: light;
-  --font-heading: "Trebuchet MS", "Segoe UI", sans-serif;
-  --font-body: "Segoe UI", system-ui, sans-serif;
+/* ============================================================
+   CertiFlow — "Crushed Paper" luxury design system
+   Palette: navy ink #0B1B3A · royal #1E3A8A · periwinkle #A1B2D6
+            paper #E7E2D9 · bronze #B48A5A
+   ============================================================ */
+
+@theme {
+  /* Brand palette */
+  --color-paper: #e7e2d9;
+  --color-paper-bright: #f4f1ea;
+  --color-paper-dim: #dbd4c6;
+  --color-paper-deep: #cfc7b6;
+
+  --color-ink: #0b1b3a;
+  --color-ink-soft: #33436b;
+  --color-ink-faint: #6b769a;
+
+  --color-royal: #1e3a8a;
+  --color-mist: #a1b2d6;
+  --color-mist-soft: #c3cee4;
+
+  --color-bronze: #b48a5a;
+  --color-bronze-bright: #c9a277;
+  --color-bronze-deep: #94703f;
+
+  /* Radii */
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+
+  /* Soft luxury shadows */
+  --shadow-paper: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 22px 60px -28px rgba(11, 27, 58, 0.35);
+  --shadow-lift: 0 30px 80px -40px rgba(11, 27, 58, 0.55);
 }
 
-html {
-  scroll-behavior: smooth;
+/* next/font families (consumed at use-site, no circular resolution) */
+@theme inline {
+  --font-sans: var(--font-sans), 'Inter', system-ui, sans-serif;
+  --font-serif: var(--font-serif), 'Cormorant Garamond', Georgia, serif;
+  --font-mono: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
+
+  /* shadcn/Bklit chart bridge → luxury palette */
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-paper-bright);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-paper-bright);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-paper-bright);
+  --color-secondary: var(--color-mist-soft);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-paper-dim);
+  --color-muted-foreground: var(--color-ink-soft);
+  --color-accent: var(--color-bronze);
+  --color-accent-foreground: var(--color-paper-bright);
+  --color-destructive: #a3412e;
+  --color-border: #d6cfc1;
+  --color-input: #d6cfc1;
+  --color-ring: var(--color-bronze);
+  --color-chart-1: var(--color-bronze);
+  --color-chart-2: var(--color-royal);
+  --color-chart-3: var(--color-ink);
+  --color-chart-4: var(--color-mist);
+  --color-chart-5: #8a7b52;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(42, 141, 240, 0.1), transparent 28%),
-    radial-gradient(circle at top right, rgba(15, 23, 42, 0.06), transparent 22%),
-    linear-gradient(180deg, #f8fbff 0%, #ffffff 42%, #eef6ff 100%);
-  color: #101828;
-  font-family: var(--font-body), system-ui, sans-serif;
+@layer base {
+  :root {
+    color-scheme: light;
+    --radius: 0.85rem;
+
+    /* Bklit chart theming — bare var names read directly by chart internals
+       (distinct from Tailwind's --color-* prefixed tokens above). */
+    --chart-background: var(--color-paper-bright);
+    --chart-foreground: var(--color-ink);
+    --chart-foreground-muted: var(--color-ink-faint);
+    --chart-label: var(--color-ink-soft);
+
+    --chart-line-primary: var(--color-bronze);
+    --chart-line-secondary: var(--color-royal);
+    --chart-crosshair: var(--color-bronze-deep);
+    --chart-grid: var(--color-border);
+
+    --chart-indicator-color: var(--color-ink);
+    --chart-indicator-secondary-color: var(--color-ink-faint);
+
+    --chart-marker-background: var(--color-paper-bright);
+    --chart-marker-border: var(--color-border);
+    --chart-marker-foreground: var(--color-ink);
+    --chart-marker-badge-background: var(--color-ink);
+    --chart-marker-badge-foreground: var(--color-paper-bright);
+
+    --chart-segment-background: var(--color-paper-dim);
+    --chart-segment-line: var(--color-border);
+
+    --chart-tooltip-background: var(--color-paper-bright);
+    --chart-brush-border: var(--color-bronze);
+
+    --chart-1: var(--color-bronze);
+    --chart-2: var(--color-royal);
+    --chart-3: var(--color-ink);
+    --chart-4: var(--color-mist);
+    --chart-5: #8a7b52;
+
+    --border: var(--color-border);
+    --foreground: var(--color-ink);
+    --muted-foreground: var(--color-ink-soft);
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    background-color: var(--color-paper);
+    /* All-over subtle crushed-paper grain + soft palette washes */
+    background-image:
+      radial-gradient(circle at 15% 12%, rgba(161, 178, 214, 0.16), transparent 42%),
+      radial-gradient(circle at 85% 8%, rgba(180, 138, 90, 0.1), transparent 38%),
+      radial-gradient(circle at 50% 100%, rgba(30, 58, 138, 0.08), transparent 55%),
+      url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.82'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='180'%20height='180'%20filter='url(%23n)'%20opacity='0.4'/%3E%3C/svg%3E");
+    background-blend-mode: normal, normal, normal, multiply;
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(180, 138, 90, 0.28);
+    color: var(--color-ink);
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
 }
 
-* {
-  box-sizing: border-box;
+@layer components {
+  /* Reusable crushed-paper surface (grain painted behind content via element bg) */
+  .paper {
+    position: relative;
+    background-color: var(--color-paper-bright);
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='p'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='160'%20height='160'%20filter='url(%23p)'%20opacity='0.32'/%3E%3C/svg%3E");
+    background-blend-mode: multiply;
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-paper);
+  }
+
+  /* Dark navy surface for contrast panels */
+  .paper-ink {
+    position: relative;
+    background-color: var(--color-ink);
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='q'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='160'%20height='160'%20filter='url(%23q)'%20opacity='0.4'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
+    color: var(--color-paper-bright);
+    border: 1px solid rgba(161, 178, 214, 0.18);
+  }
+
+  /* Mono eyebrow label */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--color-bronze-deep);
+  }
+
+  /* Bronze hairline underline flourish */
+  .rule-bronze {
+    background-image: linear-gradient(90deg, var(--color-bronze), transparent);
+    height: 1px;
+  }
+
+  /* Slim theme-colored scrollbar for scrollable panels (sidebar, etc.) */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-paper-deep) transparent;
+  }
+  .scroll-slim::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    background-color: var(--color-paper-deep);
+    border-radius: 999px;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-bronze);
+  }
 }
 
-::selection {
-  background: rgba(42, 141, 240, 0.2);
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }

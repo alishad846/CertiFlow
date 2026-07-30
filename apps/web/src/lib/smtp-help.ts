@@ -26,7 +26,7 @@ export function getSmtpHelp(message: string): SmtpHelp | null {
   if (lower.includes('self-signed certificate') || lower.includes('untrusted')) {
     return {
       title: 'SMTP certificate is not trusted',
-      description: 'Your SMTP server is presenting a self-signed or internally issued certificate.',
+      description: 'Your SMTP server is presenting a self signed or internally issued certificate.',
       fixes: ['Turn on Allow invalid certs for this company', 'Or install a trusted certificate on the SMTP server', 'Test SMTP again after saving']
     };
   }
@@ -35,7 +35,7 @@ export function getSmtpHelp(message: string): SmtpHelp | null {
     return {
       title: 'SMTP login failed',
       description: 'The server rejected the username or password you saved.',
-      fixes: ['Re-type the SMTP username exactly as provided by your mail host', 'Use the mailbox password or app password', 'Save the sender and click Test SMTP']
+      fixes: ['Type the SMTP username again exactly as provided by your mail host', 'Use the mailbox password or app password', 'Save the sender and click Test SMTP']
     };
   }
 

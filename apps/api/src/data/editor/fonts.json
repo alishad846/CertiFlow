@@ -1,0 +1,274 @@
+{
+  "data": [
+    {
+      "family": "Playfair Display",
+      "styles": [
+        {
+          "name": "Playfair Display Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/playfair-display/regular.woff2"
+        },
+        {
+          "name": "Playfair Display Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/playfair-display/700.woff2"
+        },
+        {
+          "name": "Playfair Display Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/playfair-display/italic.woff2"
+        },
+        {
+          "name": "Playfair Display Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/playfair-display/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant Garamond",
+      "styles": [
+        {
+          "name": "Cormorant Garamond Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/cormorant-garamond/regular.woff2"
+        },
+        {
+          "name": "Cormorant Garamond Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/cormorant-garamond/700.woff2"
+        },
+        {
+          "name": "Cormorant Garamond Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/cormorant-garamond/italic.woff2"
+        },
+        {
+          "name": "Cormorant Garamond Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/cormorant-garamond/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Lora",
+      "styles": [
+        {
+          "name": "Lora Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/lora/regular.woff2"
+        },
+        {
+          "name": "Lora Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/lora/700.woff2"
+        },
+        {
+          "name": "Lora Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/lora/italic.woff2"
+        },
+        {
+          "name": "Lora Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/lora/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Montserrat",
+      "styles": [
+        {
+          "name": "Montserrat Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/montserrat/regular.woff2"
+        },
+        {
+          "name": "Montserrat Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/montserrat/700.woff2"
+        },
+        {
+          "name": "Montserrat Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/montserrat/italic.woff2"
+        },
+        {
+          "name": "Montserrat Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/montserrat/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Poppins",
+      "styles": [
+        {
+          "name": "Poppins Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/poppins/regular.woff2"
+        },
+        {
+          "name": "Poppins Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/poppins/700.woff2"
+        },
+        {
+          "name": "Poppins Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/poppins/italic.woff2"
+        },
+        {
+          "name": "Poppins Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/poppins/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Open Sans",
+      "styles": [
+        {
+          "name": "Open Sans Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/open-sans/regular.woff2"
+        },
+        {
+          "name": "Open Sans Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/open-sans/700.woff2"
+        },
+        {
+          "name": "Open Sans Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/open-sans/italic.woff2"
+        },
+        {
+          "name": "Open Sans Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/open-sans/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Raleway",
+      "styles": [
+        {
+          "name": "Raleway Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/raleway/regular.woff2"
+        },
+        {
+          "name": "Raleway Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/raleway/700.woff2"
+        },
+        {
+          "name": "Raleway Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/raleway/italic.woff2"
+        },
+        {
+          "name": "Raleway Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/raleway/700italic.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Dancing Script",
+      "styles": [
+        {
+          "name": "Dancing Script Bold 500",
+          "style": "500",
+          "url": "http://localhost:4000/api/editor/fonts/dancing-script/500.woff2"
+        },
+        {
+          "name": "Dancing Script Bold 600",
+          "style": "600",
+          "url": "http://localhost:4000/api/editor/fonts/dancing-script/600.woff2"
+        },
+        {
+          "name": "Dancing Script Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/dancing-script/700.woff2"
+        },
+        {
+          "name": "Dancing Script Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/dancing-script/regular.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Great Vibes",
+      "styles": [
+        {
+          "name": "Great Vibes Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/great-vibes/regular.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Bebas Neue",
+      "styles": [
+        {
+          "name": "Bebas Neue Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/bebas-neue/regular.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Oswald",
+      "styles": [
+        {
+          "name": "Oswald Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/oswald/regular.woff2"
+        },
+        {
+          "name": "Oswald Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/oswald/700.woff2"
+        },
+        {
+          "name": "Oswald Bold 500",
+          "style": "500",
+          "url": "http://localhost:4000/api/editor/fonts/oswald/500.woff2"
+        },
+        {
+          "name": "Oswald Bold 600",
+          "style": "600",
+          "url": "http://localhost:4000/api/editor/fonts/oswald/600.woff2"
+        }
+      ]
+    },
+    {
+      "family": "Roboto Mono",
+      "styles": [
+        {
+          "name": "Roboto Mono Regular",
+          "style": "regular",
+          "url": "http://localhost:4000/api/editor/fonts/roboto-mono/regular.woff2"
+        },
+        {
+          "name": "Roboto Mono Bold 700",
+          "style": "700",
+          "url": "http://localhost:4000/api/editor/fonts/roboto-mono/700.woff2"
+        },
+        {
+          "name": "Roboto Mono Italic",
+          "style": "italic",
+          "url": "http://localhost:4000/api/editor/fonts/roboto-mono/italic.woff2"
+        },
+        {
+          "name": "Roboto Mono Italic Bold 700",
+          "style": "700italic",
+          "url": "http://localhost:4000/api/editor/fonts/roboto-mono/700italic.woff2"
+        }
+      ]
+    }
+  ]
+}

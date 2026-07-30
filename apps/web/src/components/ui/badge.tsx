@@ -3,15 +3,36 @@ import { cn } from '@/lib/cn';
 export function Badge({
   className,
   tone = 'slate',
+  children,
   ...props
 }: React.HTMLAttributes<HTMLSpanElement> & { tone?: 'slate' | 'green' | 'red' | 'amber' | 'blue' }) {
-  const tones = {
-    slate: 'bg-slate-100 text-slate-700',
-    green: 'bg-emerald-100 text-emerald-700',
-    red: 'bg-rose-100 text-rose-700',
-    amber: 'bg-amber-100 text-amber-800',
-    blue: 'bg-sky-100 text-sky-700'
+  const textTones = {
+    slate: 'text-ink-soft',
+    blue: 'text-royal',
+    green: 'text-[#3f6f4a]',
+    amber: 'text-bronze-deep',
+    red: 'text-[#a3412e]'
   } as const;
 
-  return <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold', tones[tone], className)} {...props} />;
+  const dotTones = {
+    slate: 'bg-ink-faint',
+    blue: 'bg-royal',
+    green: 'bg-[#3f6f4a]',
+    amber: 'bg-bronze',
+    red: 'bg-[#a3412e]'
+  } as const;
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 font-mono text-[0.65rem] font-medium uppercase tracking-[0.14em]',
+        textTones[tone],
+        className
+      )}
+      {...props}
+    >
+      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', dotTones[tone])} />
+      {children}
+    </span>
+  );
 }

@@ -38,7 +38,9 @@ export function FileDropzone({
     <div
       className={cn(
         'group rounded-[28px] border-2 border-dashed p-6 transition-all duration-200',
-        isDragging ? 'border-accent-400 bg-accent-50 shadow-[0_16px_50px_rgba(42,141,240,0.14)]' : 'border-slate-200 bg-white hover:border-accent-200 hover:bg-slate-50'
+        isDragging
+          ? 'border-bronze bg-bronze/5 shadow-[0_16px_50px_-24px_rgba(148,112,63,0.5)]'
+          : 'border-[color:var(--color-border)] bg-paper-bright hover:border-bronze/50 hover:bg-paper-dim/30'
       )}
       onDragOver={(event) => {
         event.preventDefault();
@@ -77,14 +79,14 @@ export function FileDropzone({
         onClick={() => inputRef.current?.click()}
         className="flex w-full flex-col items-center justify-center gap-4 text-center"
       >
-        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(42,141,240,0.12),rgba(42,141,240,0.04))] text-accent-700 shadow-inner">
+        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-bronze/25 bg-bronze/10 text-bronze-deep">
           <UploadCloud className="h-6 w-6" />
         </span>
         <div>
-          <p className="text-sm font-semibold text-ink">{label}</p>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+          <p className="font-serif text-lg text-ink">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-ink-soft">{description}</p>
         </div>
-        <p className={cn('text-sm font-medium', fileName ? 'text-ink' : 'text-accent-700')}>
+        <p className={cn('text-sm font-medium', fileName ? 'text-ink' : 'text-bronze-deep')}>
           {fileName || 'Drag and drop or browse files'}
         </p>
       </button>

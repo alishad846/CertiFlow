@@ -98,9 +98,9 @@ When recruiting new team members, here are the most common gotchas and how to so
 - **Cause**: The developer has another PostgreSQL instance or service running on port 5433 or 5432.
 - **Solution**: In `docker-compose.yml`, change the port mapping under `postgres:` from `'5434:5432'` to an unused port like `'5444:5432'`. Then update `DATABASE_URL` in `.env` to match: `postgres://postgres:postgres@127.0.0.1:5444/certiflow`.
 
-### 2. Next.js App Router Structure (`apps/web/app/` vs `apps/web/src/app/`)
-- **Important Note**: In Next.js App Router, if both `app/` (in root) and `src/app/` exist, Next.js **prioritizes `app/` and ignores `src/app/`**.
-- **Rule**: Always create new pages and routes inside **`apps/web/app/`**! Do not place page components in `apps/web/src/app/` as they will not be compiled.
+### 2. Next.js App Router lives in `apps/web/src/app/`
+- The web app uses the **`src/` directory** convention. All routes, pages, and layouts live in **`apps/web/src/app/`**, and the `@/*` import alias points at `apps/web/src/*`.
+- **Rule**: Create new pages/routes inside **`apps/web/src/app/`**. There is no root `apps/web/app/` directory — an older duplicate `app/` tree was removed, so don't recreate one (having both confuses Next.js and Tailwind's content scan).
 
 ### 3. Client-Side Loading Errors / Accessing via Local Network (`192.168.x.x`)
 - **Cause**: Next.js 15 implements strict dev server origin protection against cross-site scripting and DNS rebinding.
@@ -114,10 +114,22 @@ When recruiting new team members, here are the most common gotchas and how to so
 - **Cause**: The backend API cannot find the LibreOffice executable to render PDF certificates from DOCX templates.
 - **Solution**: Verify the `SOFFICE_PATH` variable in your `.env`. On Windows, ensure LibreOffice is installed at `C:\Program Files\LibreOffice\program\soffice.exe` or update `.env` with your custom installation path.
 
+### 6. Always use **npm** (not pnpm or yarn)
+- **Cause**: This repo's lockfile is `package-lock.json` (npm). Installing with pnpm/yarn produces a different `node_modules` layout that can pull in a **second copy of React**, which breaks the build with `Cannot read properties of null (reading 'useContext')` and makes the dashboard charts render as **solid black bars**.
+- **Solution**: Use `npm install` / `npm ci`. If you ever see the duplicate-React error or black charts, run: `rm -rf apps/web/node_modules node_modules && npm install` from the repo root (npm workspaces hoist a single React). Never commit a `pnpm-lock.yaml`.
+
+### 7. Charts render but have no colour
+- **Cause**: The Bklit charts read bare `--chart-1 … --chart-5` CSS variables defined in `apps/web/src/app/globals.css`. If that file was reverted or the dev cache is stale, bars fall back to black.
+- **Solution**: Confirm the `--chart-*` variables exist in `globals.css :root`, stop the dev server, and restart `npm run dev` to rebuild the CSS.
+
+### 8. Certificate claim links point to the wrong host
+- **Cause**: Claim/verify emails build links from `APP_URL` in `.env`. If it's blank or points elsewhere, recipients can't reach the claim page.
+- **Solution**: Set `APP_URL=http://localhost:3000` for local dev (already in `.env.example`). Issued certificate PDFs are stored under `CERT_STORE_DIR` (`./apps/api/secure-certificates`, gitignored) and are only downloadable after a recipient verifies their email.
+
 ---
 
 ## 📁 Repository Architecture Overview
-- **`apps/web`**: Next.js 15 frontend application (App Router located in `apps/web/app`).
+- **`apps/web`**: Next.js 15 + React 19 frontend (App Router in `apps/web/src/app`, Tailwind CSS v4, Bklit charts, anime.js/motion animations).
 - **`apps/api`**: Express.js REST API server, PostgreSQL database pool, Nodemailer SMTP service, and BullMQ background queue workers.
 - **`packages/shared`**: Shared TypeScript types, Zod schemas, and utility functions used across both frontend and backend.
 - **`docker`**: PostgreSQL initialization SQL scripts (`001_schema.sql`).

@@ -5,117 +5,187 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import styles from '../auth.module.css';
 
+type LoginResponse = { twoFactorRequired?: boolean; ticket?: string; user?: unknown };
+
 export default function LoginPage() {
+  const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [ticket, setTicket] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [lockedOut, setLockedOut] = useState(false);
   const [loading, setLoading] = useState(false);
 
- return (
-  <main className={styles.page}>
-    <div className={styles.gridPattern} />
+  const submitCredentials = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await apiFetch<LoginResponse>('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.twoFactorRequired && res.ticket) {
+        setTicket(res.ticket);
+        setStep('2fa');
+      } else {
+        window.location.assign('/dashboard');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      // After the attempt limit is hit the API returns "Too many login attempts…" (HTTP 429).
+      // Instead of showing a raw countdown, guide the user to reset their password or step back.
+      if (/too many login attempts/i.test(message)) {
+        setLockedOut(true);
+        setError('');
+      } else {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    <section className={styles.authShell}>
-      <div className={styles.infoPanel}>
-        <Link href="/" className={styles.logo}>
-          <span className={styles.logoMark}>C</span>
-          <span>CertiFlow</span>
-        </Link>
+  const submitCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await apiFetch('/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket, token: code.trim() })
+      });
+      window.location.assign('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        <div>
-          <p className={styles.eyebrow}>Certificate operations</p>
-          <h1 className={styles.heroTitle}>Manage bulk certificates without the manual mess.</h1>
-          <p className={styles.heroText}>
-            Sign in to upload batches, track delivery, manage credits, and keep certificate workflows moving.
-          </p>
-        </div>
+  return (
+    <main className={styles.page}>
+      <div className={styles.orbLeft} />
+      <div className={styles.orbRight} />
+      <div className={styles.shell}>
+        <section className={styles.card}>
+          <p className={styles.brand}>CertiFlow</p>
 
-        <div className={styles.statsRow}>
-          <div>
-            <strong>50k+</strong>
-            <span>Certificates</span>
-          </div>
-          <div>
-            <strong>99%</strong>
-            <span>Delivery clarity</span>
-          </div>
-        </div>
+          {lockedOut ? (
+            <>
+              <h1 className={styles.title}>Too many attempts</h1>
+              <p className={styles.description}>
+                For your security, we paused sign-in after 10 failed attempts. Please wait 10 minutes
+                and try again, reset your password, or go back.
+              </p>
+
+              <div className={styles.form}>
+                <Link href="/forgot-password" className={styles.button} style={{ textAlign: 'center' }}>
+                  Reset password
+                </Link>
+                <Link
+                  href="/"
+                  className={styles.link}
+                  style={{ textAlign: 'center', marginTop: '0.25rem' }}
+                >
+                  ← Go back
+                </Link>
+              </div>
+            </>
+          ) : step === 'credentials' ? (
+            <>
+              <h1 className={styles.title}>Welcome back</h1>
+              <p className={styles.description}>Sign in to manage batches, credits, and delivery logs.</p>
+
+              <form className={styles.form} onSubmit={submitCredentials}>
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="login-email">Email</label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className={styles.input}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@company.com"
+                  />
+                </div>
+                <div className={styles.field}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className={styles.label} htmlFor="login-password">Password</label>
+                    <Link href="/forgot-password" className={styles.link} style={{ fontSize: '0.85rem' }}>
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <input
+                    id="login-password"
+                    type="password"
+                    className={styles.input}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Your password"
+                  />
+                </div>
+
+                {error ? <p className={styles.error}>{error}</p> : null}
+
+                <button className={styles.button} type="submit" disabled={loading}>
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+              </form>
+
+              <p className={styles.footer}>
+                New here?{' '}
+                <Link href="/register" className={styles.link}>Create an account</Link>
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className={styles.title}>Two-factor</h1>
+              <p className={styles.description}>
+                Enter the 6 digit code from your authenticator app, or a backup code.
+              </p>
+
+              <form className={styles.form} onSubmit={submitCode}>
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="login-2fa">Authentication code</label>
+                  <input
+                    id="login-2fa"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className={styles.input}
+                    style={{ letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.15rem' }}
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    placeholder="123456"
+                    autoFocus
+                  />
+                </div>
+
+                {error ? <p className={styles.error}>{error}</p> : null}
+
+                <button className={styles.button} type="submit" disabled={loading}>
+                  {loading ? 'Verifying…' : 'Verify & sign in'}
+                </button>
+              </form>
+
+              <p className={styles.footer}>
+                <button
+                  type="button"
+                  onClick={() => { setStep('credentials'); setError(''); setCode(''); }}
+                  style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                  className={styles.link}
+                >
+                  ← Back to sign in
+                </button>
+              </p>
+            </>
+          )}
+        </section>
       </div>
-
-      <section className={styles.card}>
-        <p className={styles.brand}>Welcome back</p>
-        <h2 className={styles.title}>Sign in to your account</h2>
-        <p className={styles.description}>Use your CertiFlow credentials to continue.</p>
-
-        <form
-          className={styles.form}
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setError('');
-            setLoading(true);
-            try {
-              await apiFetch('/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-              });
-              window.location.assign('/dashboard');
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Login failed');
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="login-email">
-              Email address
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              className={styles.input}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@company.com"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <div className={styles.labelRow}>
-              <label className={styles.label} htmlFor="login-password">
-                Password
-              </label>
-              <Link href="/forgot-password" className={styles.link}>
-                Forgot?
-              </Link>
-            </div>
-
-            <input
-              id="login-password"
-              type="password"
-              className={styles.input}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
-            />
-          </div>
-
-          {error ? <p className={styles.error}>{error}</p> : null}
-
-          <button className={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className={styles.footer}>
-          New to CertiFlow?{' '}
-          <Link href="/register" className={styles.link}>
-            Create account
-          </Link>
-        </p>
-      </section>
-    </section>
-  </main>
-);
+    </main>
+  );
 }
