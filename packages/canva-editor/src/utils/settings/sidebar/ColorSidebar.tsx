@@ -21,6 +21,7 @@ import {
   isFrameLayer,
 } from 'canva-editor/utils/layer/layers';
 import { ColorParser, hex2rgbString } from 'canva-editor/color-picker/utils';
+import { recommendPalette } from './recommendedColors';
 import CloseIcon from 'canva-editor/icons/CloseIcon';
 import useMobileDetect from 'canva-editor/hooks/useMobileDetect';
 import { useTranslate } from 'canva-editor/contexts/TranslationContext';
@@ -118,6 +119,9 @@ const ColorSidebar: ForwardRefRenderFunction<
     }
   }, [documentGradientColors, customGradientColor, gradient]);
 
+  // Colours recommended from the template's own vibe (its existing colours, extended harmonically).
+  const recommendedColors = useMemo(() => recommendPalette(documentColors), [documentColors]);
+
   const handleSelectColor = (c: string) => {
     if (!isEqual(c, customColor)) {
       setCustomColor(null);
@@ -195,6 +199,27 @@ const ColorSidebar: ForwardRefRenderFunction<
         )}
       </div>
       <div css={{ padding: '0 20px', display: 'grid', rowGap: 24 }}>
+        {recommendedColors.length > 0 && (
+          <div>
+            <div css={{ padding: '8px 0', fontWeight: 700 }}>
+              {t('common.recommendedColors', 'Recommended for this template')}
+            </div>
+            <p css={{ color: 'rgba(13,18,22,.6)', fontSize: 11, margin: '0 0 8px' }}>
+              {t('common.recommendedColorsHint', 'Picked to match this design’s palette')}
+            </p>
+            <div
+              css={{
+                display: 'grid',
+                gridGap: 12,
+                gridTemplateColumns: `repeat(${defaultColors[0].length},minmax(0,1fr))`,
+              }}
+            >
+              {recommendedColors.map((c, ci) => (
+                <ColorIcon key={ci} color={c} selected={selected} onClick={() => handleSelectColor(c)} />
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <div css={{ padding: '8px 0', fontWeight: 700 }}>{t('common.documentColors', 'Document colors')}</div>
           <div

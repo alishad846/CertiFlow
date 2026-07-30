@@ -32,16 +32,18 @@ export const ImageContent: FC<ImageContentProps> = ({ image, boxSize }) => {
                     opacity: image.transparency,
                 }}
             >
-                <img
-                    src={image.url}
-                    css={{
-                        objectFit: 'fill',
-                        width: '100%',
-                        height: '100%',
-                        position: 'absolute',
-                        pointerEvents: 'none',
-                    }}
-                />
+                {image.url ? (
+                    <img
+                        src={image.url}
+                        css={{
+                            objectFit: 'fill',
+                            width: '100%',
+                            height: '100%',
+                            position: 'absolute',
+                            pointerEvents: 'none',
+                        }}
+                    />
+                ) : null}
             </div>
         </div>
     );

@@ -191,16 +191,6 @@ const HeaderFileMenu: FC<Props> = ({ designName, onRemove }) => {
         onRemove();
       },
     },
-    { label: 'Divider', type: 'divider' },
-    {
-      label: t('header.help', 'Help'),
-      type: 'normal',
-      icon: <HelpIcon />,
-      shortcut: '⌘H',
-      action: () => {
-        actions.goToGithubPage();
-      },
-    },
   ];
 
   const handleImport = (e: ChangeEvent<HTMLInputElement>) => {

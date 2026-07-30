@@ -24,7 +24,10 @@ export const useResize = (getData: () => BoxData) => {
                 lockAspect: boolean,
             ): BoxData => {
                 const { boxSize, position, rotate, scale } = getData();
-                const ratio = boxSize.width / boxSize.height;
+                // Guard against degenerate boxes (a zero/tiny dimension makes ratio Infinity/NaN,
+                // which then propagates NaN widths into the layer and crashes the renderer).
+                const rawRatio = boxSize.width / boxSize.height;
+                const ratio = Number.isFinite(rawRatio) && rawRatio > 0 ? rawRatio : 1;
 
                 // Aspect-locked corner resize (unrotated): scale by the cursor delta PROJECTED onto
                 // the box diagonal so the dragged corner tracks the cursor. The generic path below

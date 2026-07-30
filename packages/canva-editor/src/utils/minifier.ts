@@ -43,6 +43,16 @@ export const dataMapping: any = {
   border: 'an',
   weight: 'ao',
   roundedCorners: 'ap',
+  // Line + Table layer props — MUST be in the static map so pack AND unpack round-trip them
+  // (unknown keys only get a dynamic code on pack, which unpack can't reverse → props lost on reload).
+  arrow: 'aq',
+  rows: 'ar',
+  cols: 'as',
+  cells: 'at',
+  borderColor: 'au',
+  textColor: 'av',
+  headerRow: 'aw',
+  fontSize: 'ax',
 };
 
 function getAlphabetCharByOrder(order: number) {

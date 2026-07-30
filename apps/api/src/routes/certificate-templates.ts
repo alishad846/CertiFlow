@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { getCompanyAccess } from '../services/companies';
 import { STOCK_TEMPLATES } from '../services/stock-templates';
+import { buildStockEditorDocument } from '../services/stock-template-designs';
 import {
   type CertificateFieldConfig,
   createBlankEditorTemplate,
@@ -177,7 +178,11 @@ router.get(
       templates: STOCK_TEMPLATES.map((t) => ({
         id: t.id,
         name: t.name,
-        thumbnailUrl: `${base}/api/editor/stock/${t.file}`
+        category: t.category,
+        thumbnailUrl: `${base}/api/editor/stock/${t.file}`,
+        // The exact editable design the editor will open — the chooser renders this so the preview
+        // matches the editor 1:1.
+        design: buildStockEditorDocument(t.id, base)
       }))
     });
   })

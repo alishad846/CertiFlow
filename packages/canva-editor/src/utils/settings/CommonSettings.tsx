@@ -95,14 +95,7 @@ const CommonSettings = () => {
           gridGap: 8,
         }}
       >
-        <SettingButton
-          css={{ minWidth: 75 }}
-          onClick={() => {
-            actions.setSidebar('LAYER_MANAGEMENT');
-          }}
-        >
-          <span css={{ padding: '0 4px' }}>{t('common.position', 'Position')}</span>
-        </SettingButton>
+        {/* "Position" button removed: layer ordering/position is done via the canvas right-click menu. */}
 
         {selectedLayerIds.length > 0 && !isLocked && !isPageLocked && (
           <Fragment>

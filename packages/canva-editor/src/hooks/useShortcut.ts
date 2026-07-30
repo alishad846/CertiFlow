@@ -118,6 +118,13 @@ const useShortcut = (frameEle: HTMLElement | null) => {
   };
   const handleKeydown = useCallback(
     async (e: KeyboardEvent) => {
+      // When the user is typing (a text layer / input / contenteditable), let the text editor and
+      // browser handle their own shortcuts (bold/italic/underline, text undo, etc.).
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
       const name = keyName(e);
       const key = modifiers(name, e);
       const isSelectedLayer = selectedLayerIds.length > 0;
@@ -191,10 +198,6 @@ const useShortcut = (frameEle: HTMLElement | null) => {
           handleZoomIn();
           e.preventDefault();
           break;
-        case normalizeKeyName('Mod-h'):
-          actions.goToGithubPage();
-          e.preventDefault();
-          break;
       }
     },
     [actions, handleCopy, handlePaste, handleDuplicate, handleDelete]
@@ -233,11 +236,13 @@ const useShortcut = (frameEle: HTMLElement | null) => {
   }, [frameEle, scale]);
 
   useEffect(() => {
-    frameEle?.addEventListener('keydown', handleKeydown);
+    // Register on the document (not the canvas frame, which isn't focusable) so Ctrl+Z / redo /
+    // copy / paste / duplicate / delete / arrow-nudge / zoom shortcuts work anywhere in the editor.
+    document.addEventListener('keydown', handleKeydown);
     return () => {
-      frameEle?.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('keydown', handleKeydown);
     };
-  }, [frameEle, handleKeydown]);
+  }, [handleKeydown]);
 };
 
 export default useShortcut;

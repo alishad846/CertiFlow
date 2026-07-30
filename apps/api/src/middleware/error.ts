@@ -17,6 +17,7 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
 
   res.status(appError.statusCode).json({
     message,
-    statusCode: appError.statusCode
+    statusCode: appError.statusCode,
+    ...(appError.code ? { code: appError.code } : {})
   });
 }

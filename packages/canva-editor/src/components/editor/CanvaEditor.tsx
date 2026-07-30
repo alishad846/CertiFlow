@@ -26,6 +26,12 @@ export type EditorProps = {
   onChanges: (changes: any) => void;
   onDesignNameChanges: (name: any) => void;
   onRemove: () => void;
+  /** Fired by the header "Save" button with the current packed design. */
+  onSave?: (design: any) => void;
+  /** Home button → save then go to dashboard. */
+  onHomeSave?: (design: any) => void;
+  /** Home button → leave to dashboard without saving. */
+  onHomeDiscard?: () => void;
 };
 
 const CanvaEditor: FC<PropsWithChildren<EditorProps>> = ({
@@ -35,8 +41,10 @@ const CanvaEditor: FC<PropsWithChildren<EditorProps>> = ({
   onChanges,
   onDesignNameChanges,
   onRemove,
+  onSave,
+  onHomeSave,
+  onHomeDiscard,
 }) => {
-  const version = '1.0.69';
   const { getState, actions, query } = useEditorStore();
   const leftSidebarRef = useRef<HTMLDivElement>(null);
   const [viewPortHeight, setViewPortHeight] = useState<number>();
@@ -86,6 +94,9 @@ const CanvaEditor: FC<PropsWithChildren<EditorProps>> = ({
             saving={saving || false}
             onChanges={onDesignNameChanges}
             onRemove={onRemove}
+            onSave={onSave}
+            onHomeSave={onHomeSave}
+            onHomeDiscard={onHomeDiscard}
           />
           <div
             css={{
@@ -93,7 +104,11 @@ const CanvaEditor: FC<PropsWithChildren<EditorProps>> = ({
               flexDirection: 'row',
               flex: 'auto',
               overflow: 'auto',
-              background: '#EBECF0',
+              // CertiFlow "crushed paper" workspace: warm cream base + soft top light + subtle
+              // fractal-noise paper grain, so the canvas sits on stationery rather than flat grey.
+              backgroundColor: '#E7E2D9',
+              backgroundImage:
+                "radial-gradient(ellipse 120% 80% at 50% -10%, rgba(255,255,255,.55), rgba(231,226,217,0) 55%), linear-gradient(180deg, #ECE7DD 0%, #E1DBCE 100%), url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='0.05'/%3E%3C/svg%3E\")",
               '@media (max-width: 900px)': {
                 flexDirection: 'column-reverse',
               },
@@ -106,7 +121,7 @@ const CanvaEditor: FC<PropsWithChildren<EditorProps>> = ({
                 margin: 6,
               }}
             >
-              <Sidebar version={version} />
+              <Sidebar />
             </div>
             <div
               css={{

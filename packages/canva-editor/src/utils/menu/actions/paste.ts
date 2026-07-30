@@ -3,16 +3,28 @@ import { LayerComponentProps, SerializedLayerTree } from 'canva-editor/types';
 
 export const paste = async ({ actions }: { actions: EditorActions }) => {
     if (typeof window === 'undefined') return;
-    const data = await navigator.clipboard.readText();
+    let data = '';
     try {
-        const serializedData: SerializedLayerTree[] = JSON.parse(data);
-        //TODO VALIDATE data
+        data = await navigator.clipboard.readText();
+    } catch {
+        return; // clipboard blocked or empty
+    }
+    try {
+        const serializedData = JSON.parse(data) as SerializedLayerTree[];
+        // Only act on our own copied-layer payload; ignore anything else on the clipboard.
+        if (!Array.isArray(serializedData)) return;
         serializedData.forEach((serializedLayers) => {
+            if (!serializedLayers || !serializedLayers.rootId || !serializedLayers.layers) return;
             Object.entries(serializedLayers.layers).forEach(([layerId]) => {
-                (serializedLayers.layers[layerId].props as LayerComponentProps).position.x += 10;
-                (serializedLayers.layers[layerId].props as LayerComponentProps).position.y += 10;
+                const props = serializedLayers.layers[layerId]?.props as LayerComponentProps | undefined;
+                if (props?.position) {
+                    props.position.x += 10;
+                    props.position.y += 10;
+                }
             });
             actions.addLayerTree(serializedLayers);
         });
-    } catch (e) {}
+    } catch {
+        /* clipboard held non-JSON (plain text / image) — nothing to paste */
+    }
 };

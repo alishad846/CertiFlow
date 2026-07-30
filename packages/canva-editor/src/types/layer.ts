@@ -26,6 +26,8 @@ export type LayerType =
   | 'Image'
   | 'Text'
   | 'Shape'
+  | 'Line'
+  | 'Table'
   | 'Root'
   | 'Group'
   | 'Frame'

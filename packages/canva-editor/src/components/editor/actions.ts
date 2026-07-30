@@ -1027,41 +1027,59 @@ export const ActionMethods = (state: EditorState) => {
       state.pages[state.activePage].layers[parentId].data.child.push(layerId);
       this.selectLayers(state.activePage, layerId);
     },
+    // Insert an image that fills the whole page and sits BEHIND all other content — used for
+    // watermarks so they act as a page background rather than an overlay on top.
+    addBackgroundImageLayer({ url, thumb }: { url: string; thumb: string }) {
+      const layerId = getRandomId();
+      const pageSize = state.pageSize;
+      const dl = deserializeLayer({
+        type: { resolvedName: 'ImageLayer' },
+        props: {
+          image: {
+            url,
+            thumb,
+            boxSize: { width: pageSize.width, height: pageSize.height },
+            position: { x: 0, y: 0 },
+            rotate: 0,
+          },
+          position: { x: 0, y: 0 },
+          boxSize: { width: pageSize.width, height: pageSize.height },
+          rotate: 0,
+          transparency: 1,
+        },
+        locked: false,
+        parent: 'ROOT',
+        child: [],
+      });
+      state.pages[state.activePage].layers[layerId] = { id: layerId, data: dl };
+      // Place at the front of ROOT's children = rendered first = behind everything else.
+      state.pages[state.activePage].layers.ROOT.data.child.unshift(layerId);
+      this.selectLayers(state.activePage, layerId);
+    },
     addLayerTree(data: SerializedLayerTree) {
       // The payload from action dispatch is an array, so when spread with ...action.payload,
       // if payload is [{ rootId, layers }], data will be { rootId, layers }
       // But if payload is undefined or empty [], data will be undefined
       let actualData: SerializedLayerTree | undefined = data;
-      
-      // If data is undefined, it means no arguments were passed (payload was empty/undefined)
-      if (actualData === undefined || actualData === null) {
-        console.error('addLayerTree: data parameter is undefined or null - check that payload is correctly passed');
-        throw new Error('addLayerTree: data parameter is required - ensure you pass { rootId, layers } object');
-      }
-      
-      // Handle edge case where data might be passed as array (shouldn't happen with current dispatch)
+
+      // Handle edge case where data might be passed as array.
       if (Array.isArray(actualData)) {
         actualData = actualData[0];
       }
-      
-      if (!actualData || typeof actualData !== 'object' || Array.isArray(actualData)) {
-        console.error('addLayerTree: Invalid data parameter', { 
-          data, 
-          actualData, 
-          dataType: typeof data,
-          actualDataType: typeof actualData,
-          isArray: Array.isArray(data),
-          isActualDataArray: Array.isArray(actualData)
-        });
-        throw new Error('addLayerTree: Invalid data parameter - expected SerializedLayerTree object with { rootId, layers }');
+
+      // Invalid / empty payloads (e.g. a paste with nothing useful on the clipboard) are ignored
+      // gracefully instead of crashing the editor — nothing to insert, so just no-op.
+      if (
+        !actualData ||
+        typeof actualData !== 'object' ||
+        Array.isArray(actualData) ||
+        !actualData.layers ||
+        !actualData.rootId
+      ) {
+        return;
       }
-      
+
       const { layers, rootId } = actualData;
-      if (!layers || !rootId) {
-        console.error('addLayerTree: Missing layers or rootId', { actualData, hasLayers: !!layers, hasRootId: !!rootId });
-        throw new Error('addLayerTree: Missing layers or rootId in data');
-      }
-      
       const layer = addLayerTreeToParent(state.activePage, { layers, rootId });
       this.selectLayers(state.activePage, layer.id);
     },
@@ -1074,6 +1092,20 @@ export const ActionMethods = (state: EditorState) => {
       });
       this.selectLayers(state.activePage, ids);
       return layers;
+    },
+    // Insert several layer trees and immediately group them into a single group layer (used by the
+    // Table tool so the whole table selects / moves / resizes as one unit, with cells scaling together).
+    addGroupedLayerTrees(data: SerializedLayerTree[]) {
+      const ids: LayerId[] = [];
+      data.forEach((serializeLayers) => {
+        const layer = addLayerTreeToParent(state.activePage, serializeLayers);
+        ids.push(layer.id);
+      });
+      if (ids.length > 1) {
+        this.group(ids);
+      } else {
+        this.selectLayers(state.activePage, ids);
+      }
     },
     showContextMenu: ({ clientX, clientY }: CursorPosition) => {
       state.openMenu = {
