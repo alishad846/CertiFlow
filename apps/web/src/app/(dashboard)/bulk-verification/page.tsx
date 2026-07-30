@@ -72,26 +72,97 @@ function removeFile(indexToRemove: number) {
 }
 
   async function verifyCertificates() {
-  setIsVerifying(true);
+  try {
+    setIsVerifying(true);
 
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+    const formData = new FormData();
 
-  setResults([
-    {
-      student: "Rahul Sharma",
-      certificateId: "CERT-1001",
-      status: "Verified",
-      reason: "Certificate matched database",
-    },
-    {
-      student: "Priya Singh",
-      certificateId: "CERT-1002",
-      status: "Fake",
-      reason: "Certificate ID not found",
-    },
+    files.forEach((file) => {
+      formData.append('certificates', file);
+    });
+
+    const links = certificateLinks
+      .split('\n')
+      .map((link) => link.trim())
+      .filter(Boolean);
+
+    formData.append('links', JSON.stringify(links));
+
+    const response = await fetch(
+      'http://localhost:4000/api/bulk-verification',
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message ?? 'Verification request failed');
+    }
+
+    setResults(data.results ?? []);
+  } catch (error) {
+    console.error('Verification error:', error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'Could not verify certificates',
+    );
+
+    setResults([]);
+  } finally {
+    setIsVerifying(false);
+  }
+}
+
+function downloadCsv() {
+  if (results.length === 0) {
+    alert('No verification results available to download.');
+    return;
+  }
+
+  const headers = [
+    'Student',
+    'Certificate ID',
+    'Status',
+    'Reason',
+  ];
+
+  const escapeCsvValue = (value: string) =>
+    `"${value.replace(/"/g, '""')}"`;
+
+  const rows = results.map((result) => [
+    escapeCsvValue(result.student),
+    escapeCsvValue(result.certificateId),
+    escapeCsvValue(result.status),
+    escapeCsvValue(result.reason),
   ]);
 
-  setIsVerifying(false);
+  const csvContent = [
+    headers.join(','),
+    ...rows.map((row) => row.join(',')),
+  ].join('\n');
+
+  const blob = new Blob([csvContent], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = `certificate-verification-${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
 }
 
   return (
@@ -208,22 +279,30 @@ function removeFile(indexToRemove: number) {
   <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
     <div className="rounded-xl border p-4">
       <p className="text-sm text-gray-500">Total Certificates</p>
-      <p className="mt-2 text-3xl font-bold">0</p>
+      <p className="mt-2 text-3xl font-bold">
+  {results.length}
+</p>
     </div>
 
     <div className="rounded-xl border p-4">
       <p className="text-sm text-gray-500">Verified</p>
-      <p className="mt-2 text-3xl font-bold text-green-600">0</p>
+      <p className="mt-2 text-3xl font-bold text-green-600">
+  {results.filter((result) => result.status === 'Verified').length}
+</p>
     </div>
 
     <div className="rounded-xl border p-4">
       <p className="text-sm text-gray-500">Fake</p>
-      <p className="mt-2 text-3xl font-bold text-red-600">0</p>
+      <p className="mt-2 text-3xl font-bold text-red-600">
+  {results.filter((result) => result.status === 'Fake').length}
+</p>
     </div>
 
     <div className="rounded-xl border p-4">
       <p className="text-sm text-gray-500">Pending</p>
-      <p className="mt-2 text-3xl font-bold text-yellow-600">0</p>
+      <p className="mt-2 text-3xl font-bold text-yellow-600">
+  {isVerifying ? files.length : 0}
+</p>
     </div>
   </div>
 </section>
@@ -232,10 +311,13 @@ function removeFile(indexToRemove: number) {
     <h2 className="text-xl font-semibold">Verification Results</h2>
 
     <button
-      className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-100"
-    >
-      Download CSV
-    </button>
+  type="button"
+  onClick={downloadCsv}
+  disabled={results.length === 0}
+  className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+>
+  Download CSV
+</button>
   </div>
 
   <div className="mt-6 overflow-x-auto">
