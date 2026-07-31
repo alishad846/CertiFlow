@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
-import { isFrameLayer, isGroupLayer, isShapeLayer, isTextLayer } from 'canva-editor/utils/layer/layers';
+import { isFrameLayer, isGroupLayer, isTableLayer, isTextLayer } from 'canva-editor/utils/layer/layers';
 import { useSelectedLayers } from '.';
 
 export const useDisabledFeatures = () => {
     const { selectedLayers } = useSelectedLayers();
+    // NOTE: shapes are intentionally NOT "scalable" so their corner handles resize the box freely
+    // (following the cursor on both axes), instead of scaling proportionally. Hold Shift to lock the
+    // aspect ratio. Text and groups stay scalable (a grouped table scales its cells + text together).
     const scalable = useMemo(
-        () => !!selectedLayers.find((layer) => isTextLayer(layer) || isGroupLayer(layer) || isShapeLayer(layer)),
+        () => !!selectedLayers.find((layer) => isTextLayer(layer) || isGroupLayer(layer)),
         [JSON.stringify(selectedLayers.map((l) => l.id))],
     );
     return useMemo(() => {
@@ -27,6 +30,12 @@ export const useDisabledFeatures = () => {
             }
             if (isTextLayer(layer)) {
                 disable.vertical = true;
+            }
+
+            // Tables resize width only (rows auto-grow to fit text); no vertical/corner handles.
+            if (isTableLayer(layer)) {
+                disable.vertical = true;
+                disable.corners = true;
             }
 
             const isFrame = isFrameLayer(layer);

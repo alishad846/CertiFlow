@@ -58,11 +58,15 @@ const ControlBox: ForwardRefRenderFunction<HTMLDivElement, PropsWithChildren<Res
             }}
             style={{
                 transform: getTransformStyle({
-                    position: { x: position.x * frameScale, y: position.y * frameScale },
-                    rotate,
+                    position: {
+                        x: (Number.isFinite(position.x) ? position.x : 0) * frameScale,
+                        y: (Number.isFinite(position.y) ? position.y : 0) * frameScale,
+                    },
+                    rotate: Number.isFinite(rotate) ? rotate : 0,
                 }),
-                width: boxSize.width * frameScale,
-                height: boxSize.height * frameScale,
+                // Guard against non-finite sizes so a degenerate selection can't crash the renderer.
+                width: (Number.isFinite(boxSize.width) ? boxSize.width : 0) * frameScale,
+                height: (Number.isFinite(boxSize.height) ? boxSize.height : 0) * frameScale,
             }}
         >
             {!isDragging && !locked && !selectState && !isPageLocked && (

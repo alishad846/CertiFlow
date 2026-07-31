@@ -39,6 +39,15 @@ const initializationStatements = [
 const migrationStatements = [
   `ALTER TABLE IF EXISTS users
      ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0`,
+  // Username login: users can sign in with a username OR their email. Nullable so existing
+  // email-only accounts keep working; unique (case-insensitive) when set.
+  `ALTER TABLE IF EXISTS users
+     ADD COLUMN IF NOT EXISTS username text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
+     ON users (lower(username)) WHERE username IS NOT NULL`,
+  // Backfill the owner's username once (idempotent: only fills when still null).
+  `UPDATE users SET username = 'Sahil'
+     WHERE lower(email) = 'sahilwadwati399@gmail.com' AND username IS NULL`,
   `ALTER TABLE IF EXISTS companies
      ADD COLUMN IF NOT EXISTS status company_status NOT NULL DEFAULT 'active'`,
   `ALTER TABLE IF EXISTS companies

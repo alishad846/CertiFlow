@@ -20,13 +20,14 @@ import { visualCorners } from 'canva-editor/utils/2d/visualCorners';
 import { isPointInsideBox } from 'canva-editor/utils/2d/isPointInsideBox';
 import { getPosition } from 'canva-editor/utils';
 import { ResizeCallbackData, useResizeLayer } from '../../hooks/useResizeLayer';
-import { isImageLayer } from 'canva-editor/utils/layer/layers';
+import { isImageLayer, isLineLayer } from 'canva-editor/utils/layer/layers';
 import { getImageSize } from '../../hooks/useResize';
 import { ImageLayerProps } from 'canva-editor/layers/ImageLayer';
 import { getControlBoxSizeFromLayers } from 'canva-editor/utils/layer/getControlBoxSizeFromLayers';
 import { RotateCallbackData, useRotateLayer } from '../../hooks/useRotateLayer';
 import PageProvider from 'canva-editor/layers/core/PageContext';
 import ControlBox from 'canva-editor/layers/control/ControlBox';
+import LineControl from 'canva-editor/layers/control/LineControl';
 import Toolbar from 'canva-editor/layers/control/Toolbar';
 import Guideline from 'canva-editor/layers/control/Guideline';
 import LayerBorderBox from 'canva-editor/layers/core/LayerBorderBox';
@@ -546,19 +547,23 @@ const DesignPage: ForwardRefRenderFunction<HTMLDivElement, PageProps> = (
             pageIndex === activePage &&
             selectedLayerIds.length > 0 && (
               <Fragment>
-                {controlBox && (
-                  <ControlBox
-                    ref={controlBoxRef}
-                    boxSize={controlBox.boxSize}
-                    position={controlBox.position}
-                    rotate={controlBox.rotate}
-                    scale={controlBox.scale}
-                    locked={disabled.locked}
-                    disabled={disabled}
-                    onRouteStart={startRotate}
-                    onResizeStart={startResizing}
-                  />
-                )}
+                {controlBox &&
+                  (selectedLayers.length === 1 && isLineLayer(selectedLayers[0]) ? (
+                    // Lines use two draggable end handles instead of the box resize handles.
+                    <LineControl layerId={selectedLayers[0].id} />
+                  ) : (
+                    <ControlBox
+                      ref={controlBoxRef}
+                      boxSize={controlBox.boxSize}
+                      position={controlBox.position}
+                      rotate={controlBox.rotate}
+                      scale={controlBox.scale}
+                      locked={disabled.locked}
+                      disabled={disabled}
+                      onRouteStart={startRotate}
+                      onResizeStart={startResizing}
+                    />
+                  ))}
                 <Toolbar />
               </Fragment>
             )}

@@ -2,30 +2,33 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import styles from '../auth.module.css';
 
 type LoginResponse = { twoFactorRequired?: boolean; ticket?: string; user?: unknown };
 
 export default function LoginPage() {
   const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [ticket, setTicket] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  // When the identifier matches no account, prompt the user to register instead of just erroring.
+  const [noAccount, setNoAccount] = useState(false);
   const [lockedOut, setLockedOut] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const submitCredentials = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    setNoAccount(false);
     setLoading(true);
     try {
       const res = await apiFetch<LoginResponse>('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ identifier, password })
       });
       if (res.twoFactorRequired && res.ticket) {
         setTicket(res.ticket);
@@ -34,13 +37,19 @@ export default function LoginPage() {
         window.location.assign('/dashboard');
       }
     } catch (err) {
+      const code = err instanceof ApiError ? err.code : undefined;
       const message = err instanceof Error ? err.message : 'Login failed';
-      // After the attempt limit is hit the API returns "Too many login attempts…" (HTTP 429).
-      // Instead of showing a raw countdown, guide the user to reset their password or step back.
-      if (/too many login attempts/i.test(message)) {
+      if (code === 'account_not_found') {
+        // No such username/email → guide them to create an account.
+        setNoAccount(true);
+        setError('');
+      } else if (/too many login attempts/i.test(message)) {
+        // After the attempt limit is hit the API returns "Too many login attempts…" (HTTP 429).
+        // Instead of showing a raw countdown, guide the user to reset their password or step back.
         setLockedOut(true);
         setError('');
       } else {
+        // Wrong password (code: incorrect_password) and any other error surface their message.
         setError(message);
       }
     } finally {
@@ -102,14 +111,15 @@ export default function LoginPage() {
 
               <form className={styles.form} onSubmit={submitCredentials}>
                 <div className={styles.field}>
-                  <label className={styles.label} htmlFor="login-email">Email</label>
+                  <label className={styles.label} htmlFor="login-identifier">Username or email</label>
                   <input
-                    id="login-email"
-                    type="email"
+                    id="login-identifier"
+                    type="text"
+                    autoComplete="username"
                     className={styles.input}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@company.com"
+                    value={identifier}
+                    onChange={(event) => setIdentifier(event.target.value)}
+                    placeholder="Username or company email"
                   />
                 </div>
                 <div className={styles.field}>
@@ -130,6 +140,19 @@ export default function LoginPage() {
                 </div>
 
                 {error ? <p className={styles.error}>{error}</p> : null}
+
+                {noAccount ? (
+                  <div className={styles.error} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span>No account found. Please create an account first.</span>
+                    <Link
+                      href={`/register?username=${encodeURIComponent(identifier)}`}
+                      className={styles.button}
+                      style={{ textAlign: 'center' }}
+                    >
+                      Create an account
+                    </Link>
+                  </div>
+                ) : null}
 
                 <button className={styles.button} type="submit" disabled={loading}>
                   {loading ? 'Signing in…' : 'Sign in'}

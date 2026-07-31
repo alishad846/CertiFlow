@@ -16,6 +16,9 @@ export type CertificateEditorProps = {
   onChanges: (design: unknown) => void;
   onNameChange: (name: string) => void;
   onRemove: () => void;
+  onSave?: (design: unknown) => void;        // header "Save" → persist + go to Upload Batch
+  onHomeSave?: (design: unknown) => void;    // Home → save then go to dashboard
+  onHomeDiscard?: () => void;                // Home → leave to dashboard without saving
 };
 
 export default function CertificateEditor(props: CertificateEditorProps) {
@@ -27,6 +30,9 @@ export default function CertificateEditor(props: CertificateEditorProps) {
       onChanges={props.onChanges}
       onDesignNameChanges={props.onNameChange}
       onRemove={props.onRemove}
+      onSave={props.onSave}
+      onHomeSave={props.onHomeSave}
+      onHomeDiscard={props.onHomeDiscard}
     />
   );
 }
