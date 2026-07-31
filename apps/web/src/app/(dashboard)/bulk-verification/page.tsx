@@ -1,7 +1,6 @@
 'use client';
 
 import { ChangeEvent, DragEvent, useState } from 'react';
-
 export default function BulkVerificationPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [certificateLinks, setCertificateLinks] = useState('');
@@ -11,8 +10,11 @@ const [results, setResults] = useState<
   {
     student: string;
     certificateId: string;
-    status: "Verified" | "Fake";
+    status: "Verified" | "Fake" | "Pending";
     reason: string;
+    issuer?: string;
+    trustScore?: number;
+    documentType?: string;
   }[]
 >([]);
 
@@ -125,21 +127,29 @@ function downloadCsv() {
   }
 
   const headers = [
-    'Student',
-    'Certificate ID',
-    'Status',
-    'Reason',
-  ];
+  'Student',
+  'Certificate ID',
+  'Status',
+  'Document Type',
+  'Issuer',
+  'Trust Score',
+  'Reason',
+];
 
   const escapeCsvValue = (value: string) =>
     `"${value.replace(/"/g, '""')}"`;
 
   const rows = results.map((result) => [
-    escapeCsvValue(result.student),
-    escapeCsvValue(result.certificateId),
-    escapeCsvValue(result.status),
-    escapeCsvValue(result.reason),
-  ]);
+  escapeCsvValue(result.student),
+  escapeCsvValue(result.certificateId),
+  escapeCsvValue(result.status),
+  escapeCsvValue(result.documentType ?? '-'),
+  escapeCsvValue(result.issuer ?? '-'),
+  escapeCsvValue(
+    result.trustScore != null ? `${result.trustScore}%` : '-',
+  ),
+  escapeCsvValue(result.reason),
+]);
 
   const csvContent = [
     headers.join(','),
@@ -301,7 +311,7 @@ function downloadCsv() {
     <div className="rounded-xl border p-4">
       <p className="text-sm text-gray-500">Pending</p>
       <p className="mt-2 text-3xl font-bold text-yellow-600">
-  {isVerifying ? files.length : 0}
+  {results.filter((result) => result.status === 'Pending').length}
 </p>
     </div>
   </div>
@@ -327,14 +337,17 @@ function downloadCsv() {
           <th className="px-4 py-3 text-left">Student</th>
           <th className="px-4 py-3 text-left">Certificate ID</th>
           <th className="px-4 py-3 text-left">Status</th>
-          <th className="px-4 py-3 text-left">Reason</th>
+<th className="px-4 py-3 text-left">Document Type</th>
+<th className="px-4 py-3 text-left">Issuer</th>
+<th className="px-4 py-3 text-left">Trust Score</th>
+<th className="px-4 py-3 text-left">Reason</th>
         </tr>
       </thead>
 
       <tbody>
   {results.length === 0 ? (
     <tr>
-      <td className="px-4 py-4 text-gray-500" colSpan={4}>
+      <td className="px-4 py-4 text-gray-500" colSpan={7}>
         No certificates verified yet.
       </td>
     </tr>
@@ -358,6 +371,28 @@ function downloadCsv() {
             {result.status}
           </span>
         </td>
+        <td className="px-4 py-3">
+  {result.documentType ?? "-"}
+</td>
+        <td className="px-4 py-3">
+  <div className="flex items-center gap-2">
+    {result.issuer === 'Coursera' && (
+      <img
+        src="/providers/coursera.svg"
+        alt="Coursera"
+        className="h-5 w-5"
+      />
+    )}
+
+    <span>{result.issuer ?? '-'}</span>
+  </div>
+</td>
+
+<td className="px-4 py-3">
+  {result.trustScore != null
+    ? `${result.trustScore}%`
+    : "-"}
+</td>
 
         <td className="px-4 py-3">
           {result.reason}
