@@ -62,6 +62,43 @@ const simpleTxtLayer = (
   child: [],
   parent: 'ROOT',
 });
+
+type TemplateTextStyle = { fontObj: any; color: string; fontSize: number };
+
+const DEFAULT_MERGE_FONT = {
+  family: 'Canva Sans',
+  name: 'Canva Sans Regular',
+  url: 'http://fonts.gstatic.com/s/alexandria/v3/UMBCrPdDqW66y0Y2usFeQCH18mulUxBvI9r7TqbCHJ8BRq0b.woff2',
+  style: 'regular',
+  styles: [],
+};
+
+// A text layer for a merge-field token, styled to match the template's font, colour and size so the
+// placeholder blends in with the rest of the certificate.
+const mergeFieldLayer = (field: string, boxSize: BoxSize, position: Delta, style: TemplateTextStyle) => {
+  const font = style.fontObj || DEFAULT_MERGE_FONT;
+  const fam = font.name || 'Canva Sans Regular';
+  const color = style.color || 'rgb(0, 0, 0)';
+  const fs = style.fontSize || 28;
+  return {
+    type: { resolvedName: 'TextLayer' },
+    props: {
+      position,
+      boxSize,
+      scale: 1,
+      rotate: 0,
+      text: `<p style="text-align: center;font-family: '${fam}';font-size: ${fs}px;color: ${color};line-height: 1.4;"><span style="color: ${color};">{{${field}}}</span></p>`,
+      fonts: [font],
+      colors: [color],
+      fontSizes: [fs],
+      effect: null,
+    },
+    locked: false,
+    child: [],
+    parent: 'ROOT',
+  };
+};
+
 interface Text {
   img: ImageData;
   data: {
@@ -160,6 +197,53 @@ const TextContent: FC<{ onClose: () => void }> = ({ onClose }) => {
       onClose();
     }
   };
+
+  // Detect the template's representative text style (most-common font family, at a body size + its
+  // colour) so inserted merge fields automatically match the rest of the design.
+  const detectTemplateStyle = (): TemplateTextStyle => {
+    const fallback: TemplateTextStyle = { fontObj: null, color: 'rgb(0, 0, 0)', fontSize: 28 };
+    try {
+      const layers = (state as any).pages?.[(state as any).activePage]?.layers || {};
+      const texts = Object.values(layers).filter(
+        (l: any) => l?.data?.type === 'Text' && Array.isArray(l?.data?.props?.fonts) && l.data.props.fonts.length
+      ) as any[];
+      if (!texts.length) return fallback;
+      const freq: Record<string, number> = {};
+      texts.forEach((l) => {
+        const fam = l.data.props.fonts[0]?.family || '';
+        freq[fam] = (freq[fam] || 0) + 1;
+      });
+      const topFam = Object.keys(freq).sort((a, b) => freq[b] - freq[a])[0];
+      const sameFam = texts.filter((l) => (l.data.props.fonts[0]?.family || '') === topFam);
+      // Prefer a body-sized layer of that family (smallest size) so fields aren't heading-huge.
+      const source = sameFam.sort(
+        (a, b) => (a.data.props.fontSizes?.[0] || 99) - (b.data.props.fontSizes?.[0] || 99)
+      )[0];
+      const p = source.data.props;
+      return {
+        fontObj: p.fonts?.[0] || null,
+        color: p.colors?.[0] || fallback.color,
+        fontSize: p.fontSizes?.[0] || fallback.fontSize,
+      };
+    } catch {
+      return fallback;
+    }
+  };
+
+  const handleAddMergeField = (field: string) => {
+    const style = detectTemplateStyle();
+    const boxSize = {
+      width: Math.max(300, Math.round(style.fontSize * 9)),
+      height: Math.round(style.fontSize * 1.9),
+    };
+    const position = getPositionWhenLayerCenter(state.pageSize, boxSize);
+    const layerId = generateRandomID();
+    const layers: SerializedLayers = { [layerId]: mergeFieldLayer(field, boxSize, position, style) };
+    actions.addLayerTree({ rootId: layerId, layers });
+    if (isMobile) {
+      onClose();
+    }
+  };
   return (
     <div
       css={{
@@ -201,7 +285,7 @@ const TextContent: FC<{ onClose: () => void }> = ({ onClose }) => {
               <button
                 key={field}
                 type='button'
-                onClick={() => handleAddNewText(`{{${field}}}`, { width: 420, height: 48 }, 28)}
+                onClick={() => handleAddMergeField(field)}
                 css={{
                   border: '1px solid #d4d4d8',
                   background: '#fff',

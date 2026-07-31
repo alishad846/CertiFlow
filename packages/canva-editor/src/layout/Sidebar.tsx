@@ -1,6 +1,7 @@
 import SidebarTab from './TabList';
 import TextContent from './sidebar/TextContent';
 import ShapeContent from './sidebar/ShapeContent';
+import ToolsContent from './sidebar/ToolsContent';
 import ImageContent from './sidebar/ImageContent';
 import TemplateContent from './sidebar/TemplateContent';
 import FrameContent from './sidebar/FrameContent';
@@ -19,8 +20,6 @@ import PlusIcon from 'canva-editor/icons/PlusIcon';
 import GridViewIcon from 'canva-editor/icons/GridViewIcon';
 import styled from '@emotion/styled';
 import { FC } from 'react';
-import EditorButton from 'canva-editor/components/EditorButton';
-import GithubIcon from 'canva-editor/icons/GithubIcon';
 import { useTranslate } from 'canva-editor/contexts/TranslationContext';
 
 const FABButton = styled('button')`
@@ -38,7 +37,7 @@ const FABButton = styled('button')`
   vertical-align: middle;
 `;
 
-const Sidebar: FC<{ version: string }> = ({ version }) => {
+const Sidebar: FC = () => {
   const { actions, state } = useEditor();
   const isMobile = useMobileDetect();
   const t = useTranslate();
@@ -67,6 +66,17 @@ const Sidebar: FC<{ version: string }> = ({ version }) => {
       name: 'Frame',
       displayName: t('sidebar.frame', 'Frame'),
       icon: <FrameIcon />,
+    },
+    {
+      name: 'Tools',
+      displayName: t('sidebar.tools', 'Tools'),
+      icon: (
+        <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.7 6.3a3 3 0 0 0 3.9 3.9l2.4 2.4a2 2 0 0 1-2.8 2.8l-2.4-2.4a3 3 0 0 0-3.9-3.9z" />
+          <path d="M6 13l-2.5 2.5a2.1 2.1 0 0 0 3 3L9 16" />
+          <path d="M14.5 9.5L4 20" />
+        </svg>
+      ),
     },
   ];
 
@@ -117,6 +127,15 @@ const Sidebar: FC<{ version: string }> = ({ version }) => {
             }}
           />
         );
+      case 'Tools':
+        return (
+          <ToolsContent
+            onClose={() => {
+              actions.setSidebarTab();
+              actions.setSidebar();
+            }}
+          />
+        );
       case 'Notes':
         return <Notes placeholder={t('sidebar.notesPlaceholder', 'Notes will be displayed in Presenter View')} />;
     }
@@ -159,31 +178,12 @@ const Sidebar: FC<{ version: string }> = ({ version }) => {
         />
         {!isMobile && (
           <>
-            <div
-              css={{
-                position: 'absolute',
-                bottom: 2,
-                left: 2,
-              }}
-            >
-              <EditorButton
-                tooltip="Source code"
-                css={{ display: 'flex', flexDirection: 'column', gap: 2, height: 50, width: 60 }}
-                onClick={() => {
-                  actions.goToGithubPage();
-                }}
-              >
-                <span>
-                  <GithubIcon />
-                </span>
-                <span css={{ fontSize: 10, lineHeight: 1.6, fontWeight: 600 }}>v{version}</span>
-              </EditorButton>
-            </div>
             {state.sideBarTab && (
               <div
                 css={{
-                  backgroundColor: '#fff',
+                  backgroundColor: '#FBF9F5',
                   borderRadius: 12,
+                  border: '1px solid rgba(180,138,90,.18)',
                   width: 360,
                   '@media (max-width: 900px)': {
                     width: '100%',
@@ -191,7 +191,7 @@ const Sidebar: FC<{ version: string }> = ({ version }) => {
                     bottom: 0,
                     left: 0,
                     top: 0,
-                    background: '#fff',
+                    background: '#FBF9F5',
                   },
                 }}
               >

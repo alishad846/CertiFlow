@@ -21,8 +21,10 @@ const TransformLayer: ForwardRefRenderFunction<HTMLDivElement, PropsWithChildren
                 position: 'absolute',
             }}
             style={{
-                width: boxSize.width,
-                height: boxSize.height,
+                // Guard against non-finite sizes (e.g. a degenerate resize of a very thin line) —
+                // React throws "NaN is an invalid value for the width css style property" otherwise.
+                width: Number.isFinite(boxSize.width) ? boxSize.width : 0,
+                height: Number.isFinite(boxSize.height) ? boxSize.height : 0,
                 transform: getTransformStyle({ position, rotate }),
                 opacity: transparency,
             }}

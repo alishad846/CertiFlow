@@ -108,10 +108,12 @@ function textLayer(opts: {
   font: ReturnType<typeof fontEntry>;
   letterSpacing?: string;
   lineHeight?: number;
+  align?: 'left' | 'center' | 'right';
 }) {
   const letterSpacing = opts.letterSpacing ?? 'normal';
   const lineHeight = opts.lineHeight ?? 1.4;
-  const text = `<p style="text-align: center;font-family: '${opts.font.name}';font-size: ${opts.fontSize}px;color: ${opts.color};line-height: ${lineHeight};letter-spacing: ${letterSpacing};">${opts.content}</p>`;
+  const align = opts.align ?? 'center';
+  const text = `<p style="text-align: ${align};font-family: '${opts.font.name}';font-size: ${opts.fontSize}px;color: ${opts.color};line-height: ${lineHeight};letter-spacing: ${letterSpacing};">${opts.content}</p>`;
   return {
     type: { resolvedName: 'TextLayer' },
     props: {
@@ -205,6 +207,30 @@ function circleLayer(opts: { cx: number; cy: number; diameter: number; color: st
   };
 }
 
+// A small diamond (rotated square) accent, used at the frame corners of some designs.
+const DIAMOND_PATH = 'M 50 0 L 100 50 L 50 100 L 0 50 Z';
+function diamondLayer(opts: { cx: number; cy: number; size: number; color: string }) {
+  const s = opts.size;
+  return {
+    type: { resolvedName: 'ShapeLayer' },
+    props: {
+      position: { x: opts.cx - s / 2, y: opts.cy - s / 2 },
+      boxSize: { width: s, height: s },
+      rotate: 0,
+      clipPath: DIAMOND_PATH,
+      scale: s / 100,
+      color: opts.color,
+      shapeSize: { width: 100, height: 100 },
+      border: null,
+      roundedCorners: 0,
+      gradientBackground: null
+    },
+    locked: false,
+    child: [],
+    parent: 'ROOT'
+  };
+}
+
 const centeredX = (width: number) => Math.round((CANVAS.width - width) / 2);
 
 type Palette = {
@@ -215,35 +241,43 @@ type Palette = {
   nameSlug: FontSlug;
   bodySlug: FontSlug;
   doubleFrame: boolean;
+  corners: 'diamonds' | 'none';
+  seal: boolean;
 };
 
 const PALETTES: Record<string, Palette> = {
   'classic-navy': {
-    background: '#F6F1E7',
+    background: '#EEF1F7', // cool ivory-blue so it reads distinctly navy
     ink: '#12233F',
     accent: '#B08A4F',
     titleSlug: 'playfair-display',
     nameSlug: 'cormorant-garamond',
     bodySlug: 'lora',
-    doubleFrame: true
+    doubleFrame: true,
+    corners: 'diamonds',
+    seal: true
   },
   'botanical-green': {
-    background: '#F3F1E9',
+    background: '#E9F0E4', // sage-tinted paper
     ink: '#20402E',
     accent: '#8A7B3F',
     titleSlug: 'cormorant-garamond',
     nameSlug: 'cormorant-garamond',
     bodySlug: 'lora',
-    doubleFrame: true
+    doubleFrame: false,
+    corners: 'diamonds',
+    seal: true
   },
   'minimal-cream': {
-    background: '#FBFAF7',
+    background: '#FFFFFF', // pure white, ultra-minimal
     ink: '#2B2B2B',
     accent: '#9A9A9A',
     titleSlug: 'lora',
     nameSlug: 'lora',
     bodySlug: 'lora',
-    doubleFrame: false
+    doubleFrame: false,
+    corners: 'none',
+    seal: false
   }
 };
 
@@ -255,6 +289,7 @@ const PALETTES: Record<string, Palette> = {
  * Returns null when the id has no editable design (caller falls back to background-only seeding).
  */
 export function buildStockEditorDocument(stockId: string, assetBase: string): unknown[] | null {
+  if (OFFER_PALETTES[stockId]) return buildOfferLetterDocument(stockId, assetBase);
   const palette = PALETTES[stockId];
   if (!palette) return null;
 
@@ -275,6 +310,20 @@ export function buildStockEditorDocument(stockId: string, assetBase: string): un
   add('frameOuter', frameLayer({ x: 48, y: 48, width: 1318, height: 904, color: palette.ink, weight: 3 }));
   if (palette.doubleFrame) {
     add('frameInner', frameLayer({ x: 70, y: 70, width: 1274, height: 860, color: palette.accent, weight: 1 }));
+  }
+
+  // Corner diamond accents (distinguishes the classic/botanical designs from the minimal one).
+  if (palette.corners === 'diamonds') {
+    const inset = 92;
+    const corners: Array<[number, number]> = [
+      [inset, inset],
+      [CANVAS.width - inset, inset],
+      [inset, CANVAS.height - inset],
+      [CANVAS.width - inset, CANVAS.height - inset]
+    ];
+    corners.forEach(([cx, cy], i) =>
+      add(`corner${i}`, diamondLayer({ cx, cy, size: 22, color: palette.accent }))
+    );
   }
 
   // Title
@@ -341,8 +390,10 @@ export function buildStockEditorDocument(stockId: string, assetBase: string): un
     })
   );
 
-  // Seal
-  add('seal', circleLayer({ cx: CANVAS.width / 2, cy: 700, diameter: 104, color: palette.accent }));
+  // Seal (skipped on the minimal design)
+  if (palette.seal) {
+    add('seal', circleLayer({ cx: CANVAS.width / 2, cy: 700, diameter: 104, color: palette.accent }));
+  }
 
   // Signature (left) and date (right) rules + labels
   add('sigRule', barLayer({ x: 250, y: 838, width: 300, height: 2, color: palette.ink }));
@@ -400,5 +451,100 @@ export function buildStockEditorDocument(stockId: string, assetBase: string): un
 }
 
 export function hasEditableStockDesign(stockId: string): boolean {
-  return Boolean(PALETTES[stockId]);
+  return Boolean(PALETTES[stockId] || OFFER_PALETTES[stockId]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// Offer letters — portrait (A4-ish) document designs with merge fields for the recipient, position,
+// dates and compensation. Rendered as editable text/shape layers just like the certificates.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const LETTER = { width: 1000, height: 1414 };
+
+type OfferPalette = {
+  background: string;
+  ink: string;
+  muted: string;
+  accent: string;
+  headingSlug: FontSlug;
+  bodySlug: FontSlug;
+  headerBar: boolean;
+  headerAlign: 'left' | 'center';
+};
+
+const OFFER_PALETTES: Record<string, OfferPalette> = {
+  'offer-corporate': {
+    background: '#FFFFFF', ink: '#0B1B3A', muted: '#5B6472', accent: '#1E3A8A',
+    headingSlug: 'playfair-display', bodySlug: 'lora', headerBar: true, headerAlign: 'left'
+  },
+  'offer-modern': {
+    background: '#FFFFFF', ink: '#222222', muted: '#6B6B6B', accent: '#B48A5A',
+    headingSlug: 'lora', bodySlug: 'lora', headerBar: false, headerAlign: 'left'
+  },
+  'offer-classic': {
+    background: '#FBF7EF', ink: '#3A2E22', muted: '#6E5E4C', accent: '#8A6A43',
+    headingSlug: 'cormorant-garamond', bodySlug: 'lora', headerBar: false, headerAlign: 'center'
+  }
+};
+
+export function buildOfferLetterDocument(offerId: string, assetBase: string): unknown[] | null {
+  const p = OFFER_PALETTES[offerId];
+  if (!p) return null;
+  const base = assetBase.replace(/\/+$/, '');
+  const heading = fontEntry(base, p.headingSlug, '700');
+  const body = fontEntry(base, p.bodySlug, 'regular');
+  const bodyItalic = fontEntry(base, p.bodySlug, 'italic');
+
+  const M = 96; // page margin
+  const W = LETTER.width - M * 2; // content width
+  const layers: Record<string, unknown> = {};
+  const order: string[] = [];
+  const add = (id: string, layer: unknown) => {
+    layers[id] = layer;
+    order.push(id);
+  };
+  const para = (id: string, content: string, y: number, height: number, opts: Partial<{ fontSize: number; color: string; font: any; align: 'left' | 'center'; lineHeight: number }> = {}) =>
+    add(id, textLayer({
+      content, x: M, y, width: W, height,
+      fontSize: opts.fontSize ?? 22, color: opts.color ?? p.ink, font: opts.font ?? body,
+      align: opts.align ?? 'left', lineHeight: opts.lineHeight ?? 1.6
+    }));
+
+  // Header: company name + accent rule (or bar)
+  if (p.headerBar) add('headerBar', barLayer({ x: 0, y: 0, width: LETTER.width, height: 12, color: p.accent }));
+  para('company', '{{company_name}}', 88, 44, { fontSize: 34, color: p.ink, font: heading, align: p.headerAlign });
+  add('headerRule', barLayer({ x: M, y: 150, width: W, height: 2, color: p.accent }));
+  para('date', '{{issue_date}}', 172, 30, { fontSize: 18, color: p.muted, align: p.headerAlign === 'center' ? 'center' : 'left' });
+
+  // Title
+  para('title', 'LETTER OF OFFER', 244, 48, { fontSize: 30, color: p.accent, font: heading, align: p.headerAlign });
+
+  // Recipient + salutation
+  para('to', 'Dear {{recipient_name}},', 330, 34, { fontSize: 22, color: p.ink, font: bodyItalic });
+
+  // Body paragraphs
+  para('p1', 'We are delighted to offer you the position of {{position}} at {{company_name}}. Your skills and experience stood out, and we are confident you will make a meaningful contribution to our team.', 392, 120);
+  para('p2', 'Your employment will commence on {{start_date}}, with an annual compensation of {{salary}}. This offer is subject to the standard onboarding formalities and company policies.', 528, 110);
+  para('p3', 'We are excited to welcome you aboard. Kindly sign and return a copy of this letter to confirm your acceptance of this offer.', 648, 90);
+
+  // Closing + signature
+  para('closing', 'Warm regards,', 800, 34, { fontSize: 22, color: p.ink });
+  add('sigRule', barLayer({ x: M, y: 900, width: 320, height: 2, color: p.ink }));
+  para('sigName', 'Authorized Signatory', 912, 30, { fontSize: 18, color: p.muted });
+  para('sigCompany', '{{company_name}}', 946, 30, { fontSize: 18, color: p.ink, font: heading });
+
+  const root = {
+    type: { resolvedName: 'RootLayer' },
+    props: {
+      boxSize: { width: LETTER.width, height: LETTER.height },
+      position: { x: 0, y: 0 },
+      rotate: 0,
+      color: p.background
+    },
+    locked: false,
+    child: order,
+    parent: null
+  };
+  const readable = [{ name: '', notes: '', layers: { ROOT: root, ...layers } }];
+  return packDesign(readable) as unknown[];
 }

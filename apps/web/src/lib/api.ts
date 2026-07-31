@@ -15,6 +15,19 @@ function resolveApiUrl() {
 
 export const apiUrl = resolveApiUrl();
 
+/** Error thrown by apiFetch on a non-OK response. Carries the HTTP status and optional API `code`. */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   let response: Response;
@@ -38,7 +51,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const data = contentType?.includes('application/json') ? await response.json() : null;
 
   if (!response.ok) {
-    throw new Error(data?.message ?? 'Request failed');
+    throw new ApiError(data?.message ?? 'Request failed', response.status, data?.code);
   }
 
   return data as T;

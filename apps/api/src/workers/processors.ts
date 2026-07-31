@@ -1,5 +1,7 @@
 import path from 'path';
+import fs from 'fs/promises';
 import { Job } from 'bullmq';
+import type { Browser } from 'puppeteer';
 import { pool } from '../db/pool';
 import { env } from '../config/env';
 import { AppError } from '../lib/errors';
@@ -15,6 +17,7 @@ import {
   resolveCertificateIssueDate
 } from '../services/certificate-templates';
 import { renderCertificatePdf } from '../services/certificate-render';
+import { renderEditorPdf, launchRenderBrowser } from '../services/editor-render';
 import { ensureDir, safeSegment } from '../services/fs';
 import { emailQueue } from '../services/queue';
 import { renderTemplateString } from '../services/template-placeholders';
@@ -244,6 +247,26 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
   const pdfDir = path.join(outputRoot, 'pdf');
   await ensureDir(pdfDir);
 
+  // Editor-engine certificates are rendered by a headless browser. Launch one Chromium for the whole
+  // batch and share it across recipients — per-recipient launches would dominate the render cost.
+  const needsEditorRender =
+    isCertificateBatch &&
+    certificateTemplate?.renderEngine === 'editor' &&
+    Boolean(certificateTemplate?.editorDocument);
+  let renderBrowser: Browser | null = null;
+  if (needsEditorRender) {
+    try {
+      renderBrowser = await launchRenderBrowser();
+    } catch (error) {
+      // Fall back to per-recipient launches inside renderEditorPdf if the shared launch fails.
+      console.warn(
+        'Failed to launch shared render browser; will retry per recipient:',
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  try {
   for (let index = 0; index < docsResult.rows.length; index += 50) {
     const chunk = docsResult.rows.slice(index, index + 50);
 
@@ -266,22 +289,45 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
       try {
         if (batch.template_type === 'certificate' && certificateTemplate) {
           const baseName = `${document.row_index}-${safeName}`;
-          const rendered = await renderCertificatePdf({
-            backgroundPath: certificateTemplate.backgroundStoredPath,
-            fields: certificateTemplate.fieldConfig,
-            context: certificateContext,
-            outputDir: path.join(outputRoot, 'certificate'),
-            baseName
-          });
-          primaryDocxPath = rendered.pngPath;
-          primaryPdfPath = rendered.pdfPath;
+          const certificateDir = path.join(outputRoot, 'certificate');
 
-          // Certificate flow: reserve the public id, stamp a verification QR and
-          // digitally sign the PDF, then store it in the gated store, create the
-          // verifiable certificate + claim records, and email a claim link
-          // instead of attaching the PDF.
+          // Reserve the public id up-front so it can be merged into the design (an editor template may
+          // print `{{certificate_id}}` on the certificate itself) and reused by the QR + signing step.
           const publicId = await allocateUniquePublicId();
-          const finalized = await finalizeCertificatePdf(rendered.pdfPath, {
+
+          let renderedPdfPath: string;
+          let renderedPngPath: string | null = null;
+
+          if (certificateTemplate.renderEngine === 'editor' && certificateTemplate.editorDocument) {
+            // Canva-editor design → headless render at native size, merged per recipient.
+            await ensureDir(certificateDir);
+            renderedPdfPath = path.join(certificateDir, `${safeSegment(baseName)}.pdf`);
+            const { pdf } = await renderEditorPdf({
+              editorDocument: certificateTemplate.editorDocument,
+              context: { ...certificateContext, certificate_id: publicId },
+              browser: renderBrowser ?? undefined
+            });
+            await fs.writeFile(renderedPdfPath, pdf);
+          } else {
+            // Legacy coordinate template → composite text fields over the background image/PDF.
+            const rendered = await renderCertificatePdf({
+              backgroundPath: certificateTemplate.backgroundStoredPath,
+              fields: certificateTemplate.fieldConfig,
+              context: certificateContext,
+              outputDir: certificateDir,
+              baseName
+            });
+            renderedPdfPath = rendered.pdfPath;
+            renderedPngPath = rendered.pngPath;
+          }
+
+          primaryDocxPath = renderedPngPath;
+          primaryPdfPath = renderedPdfPath;
+
+          // Certificate flow: stamp a verification QR and digitally sign the PDF, then store it in the
+          // gated store, create the verifiable certificate + claim records, and email a claim link
+          // instead of attaching the PDF.
+          const finalized = await finalizeCertificatePdf(renderedPdfPath, {
             verifyUrl: `${appBase}/verify/${publicId}`,
             publicId,
             sign: canSign
@@ -295,7 +341,7 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             recipientName: document.recipient_name,
             recipientEmail: document.recipient_email,
             title: certificateTemplate.name ?? batch.name,
-            sourcePdfPath: rendered.pdfPath,
+            sourcePdfPath: renderedPdfPath,
             dataSnapshot: certificateContext as Record<string, unknown>,
             publicId,
             signed: finalized.signed
@@ -418,6 +464,11 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
     await refreshBatchCounts(batch.id);
     if (index + 50 < docsResult.rows.length) {
       await sleep(env.EMAIL_BATCH_DELAY_MS);
+    }
+  }
+  } finally {
+    if (renderBrowser) {
+      await renderBrowser.close().catch(() => undefined);
     }
   }
 

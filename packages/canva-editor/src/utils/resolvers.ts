@@ -5,6 +5,8 @@ import ImageLayer from '../layers/ImageLayer';
 import ShapeLayer from '../layers/ShapeLayer';
 import FrameLayer from '../layers/FrameLayer';
 import GroupLayer from '../layers/GroupLayer';
+import LineLayer from '../layers/LineLayer';
+import TableLayer from '../layers/TableLayer';
 
 export const resolvers: Record<string, ElementType> = {
     RootLayer,
@@ -13,4 +15,6 @@ export const resolvers: Record<string, ElementType> = {
     ShapeLayer,
     FrameLayer,
     GroupLayer,
+    LineLayer,
+    TableLayer,
 };

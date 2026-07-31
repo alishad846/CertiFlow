@@ -83,6 +83,12 @@ export const isImageLayer = <P extends LayerComponentProps>(
 export const isShapeLayer = <P extends LayerComponentProps>(
   layer: Layer<ShapeLayerProps> | Layer<P>
 ): layer is Layer<ShapeLayerProps> => layer.data.type === 'Shape';
+export const isLineLayer = <P extends LayerComponentProps>(
+  layer: Layer<P>
+): boolean => layer.data.type === 'Line';
+export const isTableLayer = <P extends LayerComponentProps>(
+  layer: Layer<P>
+): boolean => layer.data.type === 'Table';
 export const isFrameLayer = <P extends LayerComponentProps>(
   layer: Layer<FrameLayerProps> | Layer<P>
 ): layer is Layer<FrameLayerProps> => layer.data.type === 'Frame';

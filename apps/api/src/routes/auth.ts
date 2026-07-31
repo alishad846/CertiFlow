@@ -30,6 +30,7 @@ type LoginUserRow = {
   role: 'super_admin' | 'company_admin';
   email: string;
   name: string;
+  username: string | null;
   password_hash: string;
   token_version: number;
   company_status: 'active' | 'blocked' | null;
@@ -40,7 +41,7 @@ type LoginUserRow = {
 };
 
 const LOGIN_USER_SELECT = `
-  SELECT u.id, u.company_id, u.role, u.email, u.name, u.password_hash, u.token_version, u.two_factor_enabled,
+  SELECT u.id, u.company_id, u.role, u.email, u.name, u.username, u.password_hash, u.token_version, u.two_factor_enabled,
          c.status AS company_status, c.can_create_batches, c.can_request_upi, c.can_view_reports
   FROM users u
   LEFT JOIN companies c ON c.id = u.company_id`;
@@ -71,15 +72,25 @@ async function completeLogin(res: import('express').Response, user: LoginUserRow
   return payload;
 }
 
+// Usernames: 3-30 chars, letters/numbers/underscore/dot/hyphen. Case-insensitive-unique.
+const usernameSchema = z
+  .string()
+  .trim()
+  .min(3, 'Username must be at least 3 characters')
+  .max(30, 'Username must be at most 30 characters')
+  .regex(/^[a-zA-Z0-9_.-]+$/, 'Username may only contain letters, numbers, and _ . -');
+
 const registerSchema = z.object({
   name: z.string().min(2),
+  username: usernameSchema,
   email: z.string().email(),
   password: z.string().min(8),
   companyName: z.string().min(2)
 });
 
+// Login accepts a username OR an email in a single "identifier" field.
 const loginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().trim().min(1, 'Enter your username or email'),
   password: z.string().min(1)
 });
 
@@ -167,6 +178,10 @@ router.post(
     if (existing.rows[0]) {
       throw new AppError('Email already exists', 409);
     }
+    const usernameTaken = await pool.query('SELECT id FROM users WHERE lower(username) = lower($1)', [parsed.username]);
+    if (usernameTaken.rows[0]) {
+      throw new AppError('Username already taken', 409, 'username_taken');
+    }
 
     const result = await withTransaction(async (client) => {
       const company = await client.query<{ id: string }>(
@@ -189,11 +204,11 @@ router.post(
         can_request_upi: boolean | null;
         can_view_reports: boolean | null;
       }>(
-        `INSERT INTO users (id, company_id, name, email, password_hash, role)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'company_admin')
+        `INSERT INTO users (id, company_id, name, username, email, password_hash, role)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'company_admin')
          ON CONFLICT (email) DO NOTHING
          RETURNING id, company_id, role, email, name, token_version`,
-        [company.rows[0].id, parsed.name, parsed.email, passwordHash]
+        [company.rows[0].id, parsed.name, parsed.username, parsed.email, passwordHash]
       );
 
       if (!user.rows[0]) {
@@ -213,25 +228,33 @@ router.post(
   '/login',
   asyncHandler(async (req, res) => {
     const parsed = loginSchema.parse(req.body);
-    const loginKey = `${req.ip}:${parsed.email.toLowerCase()}`;
+    const identifier = parsed.identifier.toLowerCase();
+    const loginKey = `${req.ip}:${identifier}`;
 
     // Only failed attempts count; 10 failures locks this account+ip for 10 minutes.
     if (loginLockRemainingMs(loginKey) > 0) {
       throw new AppError('Too many login attempts.', 429);
     }
 
-    const result = await pool.query<LoginUserRow>(`${LOGIN_USER_SELECT} WHERE u.email = $1`, [parsed.email]);
+    // Match on either username or email (both compared case-insensitively).
+    const result = await pool.query<LoginUserRow>(
+      `${LOGIN_USER_SELECT} WHERE lower(u.email) = $1 OR lower(u.username) = $1`,
+      [identifier]
+    );
 
     const user = result.rows[0];
     if (!user) {
+      // No such account — signal the client to offer "create an account" (code: account_not_found).
+      // NOTE: this intentionally reveals whether an identifier exists (user-requested UX); the
+      // login-failure throttle still applies to blunt username enumeration + brute force.
       recordLoginFailure(loginKey);
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('No account found. Please create an account first.', 404, 'account_not_found');
     }
 
     const passwordOk = await bcrypt.compare(parsed.password, user.password_hash);
     if (!passwordOk) {
       recordLoginFailure(loginKey);
-      throw new AppError('Invalid credentials', 401);
+      throw new AppError('Incorrect password. Please try again.', 401, 'incorrect_password');
     }
 
     // Credentials verified — clear any accumulated failures for this key.

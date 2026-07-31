@@ -13,6 +13,22 @@ const PLACEHOLDER_ALIASES: Record<string, string[]> = {
   roll_no: ['roll_no', 'roll_number', 'rollnumber']
 };
 
+// Reverse index: an alias (e.g. `recipient_name`, `issue_date`) → its canonical key (`name`, `date`).
+// The certificate editor exposes friendly placeholders like `{{recipient_name}}` and `{{issue_date}}`,
+// but the runtime context is keyed by the canonical field (`name`, plus a worker-supplied `issue_date`).
+// Without this, those placeholders resolve to undefined and render blank on the signed certificate.
+const REVERSE_ALIASES: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const [canonical, aliases] of Object.entries(PLACEHOLDER_ALIASES)) {
+    for (const alias of aliases) {
+      if (alias !== canonical) {
+        map[alias] = canonical;
+      }
+    }
+  }
+  return map;
+})();
+
 function normalizeLookupKey(value: string) {
   return value
     .trim()
@@ -54,6 +70,23 @@ function getMatchingValue(data: TemplateData, key: string) {
       }
       for (const [entryKey, entryValue] of Object.entries(data)) {
         if (normalizeLookupKey(entryKey) === alias) {
+          return entryValue;
+        }
+      }
+    }
+  }
+
+  // The placeholder itself may be an alias (e.g. `recipient_name`, `issue_date`). Fall back to the
+  // canonical field and its whole alias family so editor placeholders resolve against the CSV context.
+  const canonical = REVERSE_ALIASES[normalizedKey];
+  if (canonical) {
+    const canonicalFamily = [canonical, ...(PLACEHOLDER_ALIASES[canonical] ?? [])];
+    for (const candidate of canonicalFamily) {
+      if (Object.prototype.hasOwnProperty.call(data, candidate)) {
+        return data[candidate];
+      }
+      for (const [entryKey, entryValue] of Object.entries(data)) {
+        if (normalizeLookupKey(entryKey) === candidate) {
           return entryValue;
         }
       }

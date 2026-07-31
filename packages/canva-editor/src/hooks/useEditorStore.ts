@@ -66,8 +66,14 @@ const autoHistoryForActions: string[] = [
   'bringToFront',
   'sendToBack',
   'addLayer',
+  'addShapeLayer',
+  'addFrameLayer',
   'addImageLayer',
+  'addBackgroundImageLayer',
   'addLayerTree',
+  'addLayerTrees',
+  'addGroupedLayerTrees',
+  'moveSelectedLayers',
   'deleteLayer',
 ];
 export const useEditorStore = () => {

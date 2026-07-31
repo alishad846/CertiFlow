@@ -80,6 +80,13 @@ const envSchema = z.object({
   CERT_SIGNING_P12_PATH: z.string().optional().default(''),
   CERT_SIGNING_P12_PASSPHRASE: z.string().default('certiflow'),
 
+  // Headless editor render (Puppeteer). RENDER_BASE_URL is the web origin hosting the chromeless
+  // /render page; RENDER_API_BASE is the absolute API origin the render browser fetches design
+  // assets (fonts/images) from. PUPPETEER_EXECUTABLE_PATH overrides the bundled Chromium if set.
+  RENDER_BASE_URL: z.string().default('http://localhost:3000'),
+  RENDER_API_BASE: z.string().default('http://localhost:4000'),
+  PUPPETEER_EXECUTABLE_PATH: z.string().optional().default(''),
+
   // Server-side Unsplash proxy for the editor's "Collection" image tab (Task 10a). The key never
   // reaches the browser: the client-side unsplash-js tab is intentionally left disabled
   // (see apps/web/src/components/editor/editor-config.ts). Empty string => search-images degrades to [].

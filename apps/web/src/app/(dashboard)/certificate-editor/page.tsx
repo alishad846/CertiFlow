@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { FileDropzone } from '@/components/ui/file-dropzone';
+import TemplatePreview from '@/components/editor/TemplatePreview';
 
 type MeResponse = { user: { role: 'super_admin' | 'company_admin'; companyId: string | null } };
 
@@ -21,7 +22,13 @@ type TemplateSummary = {
   imageHeight: number;
 };
 
-type StockTemplate = { id: string; name: string; thumbnailUrl: string };
+type StockTemplate = {
+  id: string;
+  name: string;
+  thumbnailUrl: string;
+  category: 'certificate' | 'offer-letter';
+  design: unknown;
+};
 
 type Selection =
   | { kind: 'mine'; id: string }
@@ -172,28 +179,44 @@ export default function CertificateEditorChooserPage() {
         </Card>
       ) : null}
 
-      {/* Ready-made gallery */}
+      {/* Ready-made gallery — previews are the actual editable designs (they match the editor exactly) */}
       <Card>
         <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-ink-faint">Ready-made designs</p>
         {stock.length === 0 ? (
           <p className="mt-4 text-sm text-ink-soft">Ready-made designs are on the way.</p>
         ) : (
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {stock.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setSelection({ kind: 'stock', id: t.id })}
-                className={`${cardBase} ${isSel({ kind: 'stock', id: t.id }) ? 'border-bronze ring-2 ring-bronze' : 'border-[color:var(--color-border)]'}`}
-              >
-                <div className="aspect-[7/5] w-full overflow-hidden bg-paper/60">
-                  <img src={t.thumbnailUrl} alt={t.name} className="h-full w-full object-cover" />
+          <div className="mt-4 space-y-6">
+            {(
+              [
+                { key: 'certificate', label: 'Certificates', w: 1414, h: 1000 },
+                { key: 'offer-letter', label: 'Offer letters', w: 1000, h: 1414 }
+              ] as const
+            ).map((group) => {
+              const items = stock.filter((t) => t.category === group.key);
+              if (items.length === 0) return null;
+              return (
+                <div key={group.key}>
+                  <p className="mb-3 font-serif text-sm text-ink-soft">{group.label}</p>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {items.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelection({ kind: 'stock', id: t.id })}
+                        className={`${cardBase} ${isSel({ kind: 'stock', id: t.id }) ? 'border-bronze ring-2 ring-bronze' : 'border-[color:var(--color-border)]'}`}
+                      >
+                        <div className="w-full overflow-hidden bg-paper/60">
+                          <TemplatePreview design={t.design} nativeWidth={group.w} nativeHeight={group.h} />
+                        </div>
+                        <div className="px-3 py-2">
+                          <p className="truncate font-serif text-sm text-ink">{t.name}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="px-3 py-2">
-                  <p className="truncate font-serif text-sm text-ink">{t.name}</p>
-                </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
