@@ -10,9 +10,59 @@ export const STOCK_TEMPLATES: StockTemplateDef[] = [
   { id: 'classic-navy', name: 'Classic Navy', file: 'classic-navy.png', category: 'certificate' },
   { id: 'botanical-green', name: 'Botanical Green', file: 'botanical-green.png', category: 'certificate' },
   { id: 'minimal-cream', name: 'Minimal Cream', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'royal-gold', name: 'Royal Gold', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'modern-blue', name: 'Modern Blue', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'executive-black', name: 'Executive Black', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'academic-emerald', name: 'Academic Emerald', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'burgundy-prestige', name: 'Burgundy Prestige', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'creative-coral', name: 'Creative Coral', file: 'minimal-cream.png', category: 'certificate' },
+  { id: 'technology-silver', name: 'Technology Silver', file: 'minimal-cream.png', category: 'certificate' },
   { id: 'offer-corporate', name: 'Corporate Offer', file: 'minimal-cream.png', category: 'offer-letter' },
   { id: 'offer-modern', name: 'Modern Offer', file: 'minimal-cream.png', category: 'offer-letter' },
-  { id: 'offer-classic', name: 'Classic Offer', file: 'minimal-cream.png', category: 'offer-letter' }
+  { id: 'offer-classic', name: 'Classic Offer', file: 'minimal-cream.png', category: 'offer-letter' },
+  {
+  id: 'offer-executive-blue',
+  name: 'Executive Blue',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-startup-minimal',
+  name: 'Startup Minimal',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-hr-professional',
+  name: 'HR Professional',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-luxury-gold',
+  name: 'Luxury Gold',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-technology',
+  name: 'Technology Company',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-creative-agency',
+  name: 'Creative Agency',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+},
+{
+  id: 'offer-green-corporate',
+  name: 'Green Corporate',
+  file: 'minimal-cream.png',
+  category: 'offer-letter'
+}
+ 
 ];
 
 export const STOCK_TEMPLATES_DIR = path.resolve(__dirname, '..', 'data', 'editor', 'stock-templates');
