@@ -150,7 +150,7 @@ export default function UploadPage() {
     <div className="space-y-6">
       <Card>
         <p className="eyebrow">New batch</p>
-        <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">Upload Excel and generate certificates from the active template.</h2>
+        <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">Upload an Excel or CSV sheet and generate certificates from your template.</h2>
       </Card>
 
       <Card>
@@ -190,7 +190,9 @@ export default function UploadPage() {
           }}
         >
           <div>
-            <label className="mb-2 block text-sm font-medium text-ink-soft">Batch name</label>
+            <label className="mb-2 block text-sm font-medium text-ink-soft">
+              Batch name<span className="text-[#a3412e]"> *</span>
+            </label>
             <Input value={batchName} onChange={(event) => setBatchName(event.target.value)} placeholder="May 2026 Certificate Batch" />
           </div>
 
@@ -258,7 +260,9 @@ export default function UploadPage() {
 
             {role === 'super_admin' ? (
               <div>
-                <label className="mb-2 block text-sm font-medium text-ink-soft">Company ID for super admin</label>
+                <label className="mb-2 block text-sm font-medium text-ink-soft">
+                  Company ID for super admin<span className="text-[#a3412e]"> *</span>
+                </label>
                 <Input value={companyId} onChange={(event) => setCompanyId(event.target.value)} placeholder="Only needed for super admin" />
               </div>
             ) : null}
@@ -290,10 +294,11 @@ export default function UploadPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <FileDropzone
-              label="Excel sheet"
-              accept=".xls,.xlsx"
-              description="Columns like Name, Email, Course, Role, Joining Date, Completion Date, Roll Number."
+              label="Excel or CSV sheet"
+              accept=".xls,.xlsx,.csv"
+              description="Excel (.xlsx, .xls) or CSV with columns like Name, Email, Course, Role, Joining Date, Completion Date, Roll Number."
               onFileChange={setExcelFile}
+              required
             />
 
             {templateType === 'offer_letter' ? (
@@ -302,6 +307,7 @@ export default function UploadPage() {
                 accept=".docx"
                 description="Upload the DOCX template file to be used for this batch."
                 onFileChange={setTemplateFile}
+                required
               />
             ) : null}
 
@@ -367,7 +373,7 @@ export default function UploadPage() {
                 {previewLoading ? 'Generating preview' : 'Generate sample preview'}
               </Button>
             )}
-            <Button type="submit" disabled={loading || (templateType === 'offer_letter' && !templateFile)} className="sm:min-w-[220px]">
+            <Button type="submit" disabled={loading || !batchName.trim() || !excelFile || (templateType === 'offer_letter' && !templateFile)} className="sm:min-w-[220px]">
               <UploadCloud className="mr-2 h-4 w-4" />
               {loading ? 'Queuing batch' : 'Generate documents'}
             </Button>

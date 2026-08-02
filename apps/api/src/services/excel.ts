@@ -47,7 +47,10 @@ const normalizeDate = (value: unknown) => {
 
 export async function readExcelRecipients(filePath: string): Promise<RecipientRow[]> {
   const buffer = await fs.readFile(filePath);
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // raw:true keeps every value exactly as the user typed it — critical for CSVs, where SheetJS would
+  // otherwise auto-parse ambiguous dates like "03-08-2026" and reformat them (wrong day/month). Excel
+  // serial dates arrive as numbers and are handled by normalizeDate for the known date columns.
+  const workbook = XLSX.read(buffer, { type: 'buffer', raw: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     return [];
@@ -56,7 +59,7 @@ export async function readExcelRecipients(filePath: string): Promise<RecipientRo
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: '',
-    raw: false
+    raw: true
   });
 
   const invalidRows: Array<{ rowIndex: number; reason: string }> = [];
@@ -68,8 +71,21 @@ export async function readExcelRecipients(filePath: string): Promise<RecipientRo
         normalized[normalizeKey(key)] = value;
       }
 
-      const name = String(normalized.name ?? '').trim();
-      const email = String(normalized.email ?? '').trim();
+      // Accept common header names for the recipient's name / email so sheets built around the
+      // merge-field tokens ({{recipient_name}}) validate too — not only literal "Name"/"Email".
+      const name = String(
+        normalized.name ??
+          normalized.recipient_name ??
+          normalized.full_name ??
+          normalized.fullname ??
+          normalized.student_name ??
+          normalized.participant_name ??
+          normalized.recipient ??
+          ''
+      ).trim();
+      const email = String(
+        normalized.email ?? normalized.email_address ?? normalized.e_mail ?? normalized.mail ?? ''
+      ).trim();
 
       const candidate = {
         rowIndex: index + 2,

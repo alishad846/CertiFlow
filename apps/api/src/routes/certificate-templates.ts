@@ -30,6 +30,7 @@ import {
   renderCertificateBackgroundPreviewPage,
   renderCertificatePdfPreview
 } from '../services/certificate-render';
+import { renderEditorPdf } from '../services/editor-render';
 import { safeSegment } from '../services/fs';
 
 const router = Router();
@@ -78,12 +79,15 @@ const previewUpload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel'
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv',
+      'text/plain'
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    const isExcel = allowed.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext);
+    const isExcel = allowed.includes(file.mimetype) || ['.xls', '.xlsx', '.csv'].includes(ext);
     if (!isExcel) {
-      cb(new AppError('Only Excel files are allowed', 400));
+      cb(new AppError('Only Excel (.xls, .xlsx) or CSV (.csv) files are allowed', 400));
       return;
     }
     cb(null, true);
@@ -406,16 +410,32 @@ router.post(
         throw new AppError('The uploaded Excel file does not contain valid recipient rows', 400);
       }
 
-      const previewBuffer = await renderCertificatePdfPreview({
-        backgroundPath: template.backgroundStoredPath,
-        fields: template.fieldConfig,
-        context: {
-          ...buildTemplateContext(recipients[0]),
-          issue_date: resolveCertificateIssueDate(template)
-        }
-      });
+      const context = {
+        ...buildTemplateContext(recipients[0]),
+        issue_date: resolveCertificateIssueDate(template)
+      };
 
-      const contentType = path.extname(template.backgroundStoredPath).toLowerCase() === '.pdf' ? 'application/pdf' : 'image/png';
+      let previewBuffer: Buffer;
+      let contentType: string;
+      if (template.renderEngine === 'editor' && template.editorDocument) {
+        // Canva-editor design (incl. offer letters + edited certificates) → render the actual editor
+        // document, exactly like the batch worker does, so the preview matches what recipients receive.
+        const { pdf } = await renderEditorPdf({
+          editorDocument: template.editorDocument,
+          context
+        });
+        previewBuffer = pdf;
+        contentType = 'application/pdf';
+      } else {
+        // Legacy coordinate template → composite fields over the background image/PDF.
+        previewBuffer = await renderCertificatePdfPreview({
+          backgroundPath: template.backgroundStoredPath,
+          fields: template.fieldConfig,
+          context
+        });
+        contentType = path.extname(template.backgroundStoredPath).toLowerCase() === '.pdf' ? 'application/pdf' : 'image/png';
+      }
+
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'no-store');
       res.send(previewBuffer);

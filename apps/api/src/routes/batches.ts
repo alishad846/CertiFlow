@@ -28,7 +28,10 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowedExcel = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel'
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv',
+      'text/plain' // some browsers send CSV as text/plain
     ];
     const allowedDocx = [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -43,12 +46,12 @@ const upload = multer({
       'image/jpeg'
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    const isExcel = allowedExcel.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext);
+    const isExcel = allowedExcel.includes(file.mimetype) || ['.xls', '.xlsx', '.csv'].includes(ext);
     const isTemplate = allowedTemplates.includes(file.mimetype) || ['.docx', '.pdf'].includes(ext);
     const isAttachment = allowedAttachments.includes(file.mimetype) || ['.pdf', '.png', '.jpg', '.jpeg'].includes(ext);
 
     if (file.fieldname === 'excelFile' && !isExcel) {
-      cb(new AppError('Only Excel files are allowed in the Excel field', 400));
+      cb(new AppError('Only Excel (.xls, .xlsx) or CSV (.csv) files are allowed in the data field', 400));
       return;
     }
     if ((file.fieldname === 'templateFile' || file.fieldname === 'templateFiles') && !isTemplate) {

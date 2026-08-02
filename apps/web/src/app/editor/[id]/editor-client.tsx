@@ -22,10 +22,14 @@ export default function EditorClient({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track the LATEST design so renaming (and Home/Save) never clobber edits with the stale
+  // mount-time `design` — the bug that reverted saved templates back to their original stock design.
+  const latestDesign = useRef<unknown>(design);
   const config = buildEditorConfig({ token: '', fields: MERGE_FIELDS });
 
   const onChanges = useCallback(
     (next: unknown) => {
+      latestDesign.current = next;
       if (timer.current) clearTimeout(timer.current);
       setSaving(true);
       timer.current = setTimeout(() => {
@@ -37,9 +41,10 @@ export default function EditorClient({
 
   const onNameChange = useCallback(
     (n: string) => {
-      saveDesign(templateId, { name: n, editorDocument: design });
+      // Save the name alongside the LATEST design (not the stale original) so edits survive a rename.
+      saveDesign(templateId, { name: n, editorDocument: latestDesign.current });
     },
-    [templateId, design]
+    [templateId]
   );
 
   // Header "Save": persist the latest design, then take the user to the Upload Batch flow so they can
