@@ -8,23 +8,23 @@
    ============================================================ */
 
 @theme {
-  /* Brand palette */
-  --color-paper: #e7e2d9;
-  --color-paper-bright: #f4f1ea;
-  --color-paper-dim: #dbd4c6;
-  --color-paper-deep: #cfc7b6;
+  /* Brand palette — redesign ("Certificates, perfected"): warm cream paper, navy ink, gold */
+  --color-paper: #e4dfd0;
+  --color-paper-bright: #f5f0e6;
+  --color-paper-dim: #d9d3c3;
+  --color-paper-deep: #cec8b8;
 
-  --color-ink: #0b1b3a;
-  --color-ink-soft: #33436b;
-  --color-ink-faint: #6b769a;
+  --color-ink: #0b1628;
+  --color-ink-soft: #57503f;
+  --color-ink-faint: #857a66;
 
   --color-royal: #1e3a8a;
   --color-mist: #a1b2d6;
   --color-mist-soft: #c3cee4;
 
-  --color-bronze: #b48a5a;
-  --color-bronze-bright: #c9a277;
-  --color-bronze-deep: #94703f;
+  --color-bronze: #b8922e;
+  --color-bronze-bright: #d4a847;
+  --color-bronze-deep: #8a6e22;
 
   /* Radii */
   --radius-2xl: 1.5rem;
@@ -57,8 +57,8 @@
   --color-accent: var(--color-bronze);
   --color-accent-foreground: var(--color-paper-bright);
   --color-destructive: #a3412e;
-  --color-border: #d6cfc1;
-  --color-input: #d6cfc1;
+  --color-border: #d8ceb4;
+  --color-input: #d8ceb4;
   --color-ring: var(--color-bronze);
   --color-chart-1: var(--color-bronze);
   --color-chart-2: var(--color-royal);

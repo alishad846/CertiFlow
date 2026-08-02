@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { Cormorant_Garamond, Inter, JetBrains_Mono } from 'next/font/google';
+import { Bodoni_Moda, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const serif = Cormorant_Garamond({
+// Redesign type system: Bodoni Moda (display serif) + DM Sans (body).
+const serif = Bodoni_Moda({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   style: ['normal', 'italic'],
@@ -10,8 +11,9 @@ const serif = Cormorant_Garamond({
   display: 'swap'
 });
 
-const sans = Inter({
+const sans = DM_Sans({
   subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
   variable: '--font-sans',
   display: 'swap'
 });
