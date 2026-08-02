@@ -1,24 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FileUp,
   LogOut,
-  ScrollText,
   ShieldCheck,
   Sparkles,
   ArrowUpRight,
-  Mail,
   WalletCards,
   Crown,
   Building2,
   Palette,
-  Award,
-  Gem,
+  Settings,
+  Lock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  type LucideIcon
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { Button } from './ui/button';
@@ -38,14 +37,18 @@ type MeResponse = {
       canViewReports: boolean;
     };
     mustSetupTwoFactor?: boolean;
+    smtpConfigured?: boolean;
   };
 };
+
+type NavItem = { href: string; label: string; icon: LucideIcon; gated?: boolean };
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse['user'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const currentPath = pathname ?? '';
 
   useEffect(() => {
@@ -79,7 +82,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+    // Re-fetch on navigation so nav lock state (smtpConfigured) reflects a fresh SMTP setup.
+  }, [currentPath]);
+
+  // Onboarding gate: a company admin without SMTP configured cannot reach the issuing features.
+  useEffect(() => {
+    if (!user || user.role !== 'company_admin' || user.smtpConfigured !== false) return;
+    const gated = ['/uploads', '/certificate-editor', '/bulk-verification'];
+    if (gated.some((p) => currentPath.startsWith(p))) {
+      router.replace('/settings?tab=email');
+    }
+  }, [user, currentPath, router]);
 
   if (loading) {
     return (
@@ -128,101 +141,52 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="mt-6 space-y-2">
-              <NavLink href="/dashboard" active={currentPath === '/dashboard'}>
-                <span className="flex items-center gap-2">
-                  <LayoutDashboard className="h-4 w-4" /> Dashboard
-                </span>
-              </NavLink>
-              {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/uploads" active={currentPath === '/uploads'}>
-                  <span className="flex items-center gap-2">
-                    <FileUp className="h-4 w-4" /> Upload Batch
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role !== 'super_admin' ? (
-  <NavLink
-    href="/bulk-verification"
-    active={currentPath.startsWith('/bulk-verification')}
-  >
-    <span className="flex items-center gap-2">
-      <ShieldCheck className="h-4 w-4" /> Bulk Verification
-    </span>
-  </NavLink>
-) : null}
-              {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/certificate-editor" active={currentPath.startsWith('/certificate-editor')}>
-                  <span className="flex items-center gap-2">
-                    <Palette className="h-4 w-4" /> Certificate Editor
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
-                <NavLink href="/templates" active={currentPath.startsWith('/templates')}>
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" /> My Templates
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role !== 'super_admin' && user?.permissions?.canViewReports !== false ? (
-                <NavLink href="/logs" active={currentPath === '/logs'}>
-                  <span className="flex items-center gap-2">
-                    <ScrollText className="h-4 w-4" /> Email Logs
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role !== 'super_admin' && user?.permissions?.canViewReports !== false ? (
-                <NavLink href="/certificates" active={currentPath.startsWith('/certificates')}>
-                  <span className="flex items-center gap-2">
-                    <Award className="h-4 w-4" /> Certificates
-                  </span>
-                </NavLink>
-              ) : null}
-              {(user?.role === 'super_admin' || user?.permissions?.canRequestUpi !== false) ? (
-                <NavLink href="/billing" active={currentPath.startsWith('/billing')}>
-                  <span className="flex items-center gap-2">
-                    <WalletCards className="h-4 w-4" /> Billing
-                  </span>
-                </NavLink>
-              ) : null}
-              {(user?.role === 'super_admin' || user?.permissions?.canRequestUpi !== false) ? (
-                <NavLink href="/sender" active={currentPath.startsWith('/sender')}>
-                  <span className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" /> Email Sender
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role === 'super_admin' ? (
-                <NavLink href="/companies" active={currentPath.startsWith('/companies')}>
-                  <span className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" /> Companies
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role === 'super_admin' ? (
-                <NavLink href="/discounts" active={currentPath.startsWith('/discounts')}>
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" /> Discounts
-                  </span>
-                </NavLink>
-              ) : null}
-              {user?.role === 'super_admin' ? (
-                <NavLink href="/certificates" active={currentPath.startsWith('/certificates')}>
-                  <span className="flex items-center gap-2">
-                    <Award className="h-4 w-4" /> Certificates
-                  </span>
-                </NavLink>
-              ) : null}
-              <NavLink href="/plans" active={currentPath.startsWith('/plans')}>
-                <span className="flex items-center gap-2">
-                  <Gem className="h-4 w-4" /> Plans
-                </span>
-              </NavLink>
-              <NavLink href="/security" active={currentPath.startsWith('/security')}>
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4" /> Security
-                </span>
-              </NavLink>
+              {(user?.role === 'super_admin'
+                ? ([
+                    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                    { href: '/companies', label: 'Companies', icon: Building2 },
+                    { href: '/discounts', label: 'Discounts', icon: Sparkles },
+                    { href: '/billing', label: 'Billing', icon: WalletCards },
+                    { href: '/settings', label: 'Settings', icon: Settings }
+                  ] as NavItem[])
+                : ([
+                    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                    { href: '/uploads', label: 'Upload Batch', icon: FileUp, gated: true },
+                    { href: '/bulk-verification', label: 'Bulk Verification', icon: ShieldCheck, gated: true },
+                    { href: '/certificate-editor', label: 'Certificate Editor', icon: Palette, gated: true },
+                    { href: '/templates', label: 'My Templates', icon: Sparkles },
+                    { href: '/billing', label: 'Billing', icon: WalletCards },
+                    { href: '/settings', label: 'Settings', icon: Settings }
+                  ] as NavItem[])
+              ).map((item) => {
+                const Icon = item.icon;
+                const active = item.href === '/dashboard' ? currentPath === '/dashboard' : currentPath.startsWith(item.href);
+                const locked = Boolean(item.gated) && user?.role !== 'super_admin' && user?.smtpConfigured === false;
+                if (locked) {
+                  return (
+                    <button
+                      key={item.href}
+                      type="button"
+                      aria-disabled="true"
+                      title="Set up email sending first"
+                      onClick={() => router.push('/settings?tab=email')}
+                      className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium tracking-wide text-ink-faint/70 transition hover:bg-paper-dim"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" /> {item.label}
+                      </span>
+                      <Lock className="h-3.5 w-3.5" />
+                    </button>
+                  );
+                }
+                return (
+                  <NavLink key={item.href} href={item.href} active={active}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" /> {item.label}
+                    </span>
+                  </NavLink>
+                );
+              })}
             </div>
 
             <Card className="mt-8 p-4">
