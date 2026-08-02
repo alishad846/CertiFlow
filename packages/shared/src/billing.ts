@@ -55,7 +55,13 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: '500 credits to send your first batches.',
     credits: 500,
     amountInr: 1499,
-    features: ['500 document credits', 'Signed, verifiable PDFs', 'QR + tamper-evident verification']
+    features: [
+      '500 document credits',
+      'Signed & verifiable PDFs',
+      'QR + unique-ID verification page',
+      'Email delivery with automatic retries',
+      '1 admin seat'
+    ]
   },
   {
     key: 'growth',
@@ -64,7 +70,14 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 2000,
     amountInr: 4999,
     recommended: true,
-    features: ['2,000 document credits', 'Priority batch processing', 'Best value per credit']
+    features: [
+      '2,000 document credits',
+      'Everything in Starter',
+      'Priority batch processing',
+      'Bulk verification tools',
+      'Delivery & claim analytics',
+      'Up to 5 admin seats'
+    ]
   },
   {
     key: 'scale',
@@ -72,7 +85,14 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: '5,000 credits for high-volume sending.',
     credits: 5000,
     amountInr: 9999,
-    features: ['5,000 document credits', 'Highest volume sending', 'Ideal for large hiring drives']
+    features: [
+      '5,000 document credits',
+      'Everything in Growth',
+      'Highest send throughput',
+      'Company DSC auto-signing (Form 16-style)',
+      'Priority support',
+      'Unlimited admin seats'
+    ]
   }
 ];
 

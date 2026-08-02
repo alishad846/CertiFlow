@@ -277,7 +277,7 @@ export default function BillingPage() {
                     <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-ink-faint">{plan.name}</p>
                     <div className="mt-2 font-serif text-2xl text-ink">Rs. {plan.amountInr.toLocaleString('en-IN')}</div>
                   </div>
-                  {plan.recommended ? <Badge tone="blue">Best value</Badge> : null}
+                  {plan.recommended ? <Badge tone="amber">Best value</Badge> : null}
                 </div>
                 <p className="mt-2 text-sm font-medium text-bronze-deep">{plan.credits.toLocaleString('en-IN')} credits</p>
                 <p className="mt-3 text-sm leading-6 text-ink-soft">{plan.description}</p>
