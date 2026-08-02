@@ -50,7 +50,8 @@ export default function RegisterPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
               });
-              window.location.assign('/dashboard');
+              // New companies must set up email sending before they can issue — land them there.
+              window.location.assign('/settings?tab=email');
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Registration failed');
             } finally {
