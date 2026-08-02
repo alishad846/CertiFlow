@@ -16,7 +16,7 @@ import {
   getCertificateTemplateById,
   resolveCertificateIssueDate
 } from '../services/certificate-templates';
-import { renderCertificatePdf } from '../services/certificate-render';
+import { renderCertificatePdf, renderCertificateBackgroundPreviewPage } from '../services/certificate-render';
 import { renderEditorPdf, launchRenderBrowser } from '../services/editor-render';
 import { ensureDir, safeSegment } from '../services/fs';
 import { emailQueue } from '../services/queue';
@@ -26,22 +26,74 @@ import { finalizeCertificatePdf } from '../services/certificate-finalize';
 import { recordCertificateUsage } from '../services/subscriptions';
 import { loadCompanyDscForSigning } from '../services/company-signing';
 
-function buildClaimEmailHtml(message: string, context: Record<string, unknown>, claimUrl: string) {
+function buildClaimEmailHtml(
+  message: string,
+  context: Record<string, unknown>,
+  claimUrl: string,
+  meta: { companyName: string; isOfferLetter: boolean }
+) {
   const name = String(context?.name ?? '').trim() || 'there';
   const resolved = renderTemplateString(
     message || `Congratulations ${name}! Your certificate is ready to claim.`,
     context
   ).trim();
   const safe = escapeHtml(resolved || `Congratulations ${name}!`).replace(/\r?\n/g, '<br>');
+  const documentLabel = meta.isOfferLetter ? 'Offer Letter' : 'Certificate';
+  const companyName = escapeHtml(meta.companyName || 'CertiFlow');
 
+  // Table-based, inline-styled markup — the layout email clients (Gmail/Outlook/Apple Mail) render
+  // consistently; no external CSS/webfonts, only websafe serif/mono stacks that approximate the
+  // product's Cormorant/JetBrains Mono look while degrading gracefully.
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px; background: #f4f1ea; border: 1px solid #d6cfc1; border-radius: 16px;">
-      <p style="color: #33436b; font-size: 16px; line-height: 1.7; margin: 0 0 8px;">${safe}</p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${claimUrl}" style="display: inline-block; background: #0b1b3a; color: #f4f1ea; text-decoration: none; padding: 14px 34px; border-radius: 999px; font-weight: 600; letter-spacing: 0.02em;">Claim Now</a>
-      </div>
-      <p style="color: #6b769a; font-size: 13px; line-height: 1.6; text-align: center; margin: 0;">Or open this link in your browser:<br><a href="${claimUrl}" style="color: #94703f; word-break: break-all;">${claimUrl}</a></p>
-    </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#e7e2d9;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+          <tr>
+            <td align="center" style="padding-bottom:22px;">
+              <span style="font-family:'Courier New',Courier,monospace;font-size:12px;letter-spacing:6px;color:#0b1b3a;text-transform:uppercase;">CertiFlow</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f5f0e6;border:1px solid #d8ceb4;border-radius:20px;padding:0;overflow:hidden;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="height:5px;background-color:#b8922e;border-radius:20px 20px 0 0;line-height:5px;font-size:0;">&nbsp;</td>
+                </tr>
+                <tr>
+                  <td style="padding:40px 44px 8px;text-align:center;">
+                    <span style="font-family:'Courier New',Courier,monospace;font-size:11px;letter-spacing:4px;color:#8a6e22;text-transform:uppercase;">A ${documentLabel} from ${companyName}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 44px 0;text-align:center;">
+                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.35;color:#0b1b3a;">${safe}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:30px 44px 6px;text-align:center;">
+                    <a href="${claimUrl}" style="display:inline-block;background-color:#0b1b3a;color:#f5f0e6;text-decoration:none;padding:15px 40px;border-radius:999px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:600;letter-spacing:0.06em;">CLAIM NOW</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:20px 44px 40px;text-align:center;">
+                    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:#857a66;">Or open this link in your browser:<br>
+                      <a href="${claimUrl}" style="color:#8a6e22;word-break:break-all;">${claimUrl}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding-top:26px;">
+              <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:3px;color:#857a66;text-transform:uppercase;">Secured &amp; verified by CertiFlow</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
   `;
 }
 
@@ -282,6 +334,7 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
       let primaryDocxPath: string | null = null;
       let primaryPdfPath: string | null = null;
       let claimUrl: string | null = null;
+      let isOfferLetter = false;
 
       try {
         if (batch.template_type === 'certificate' && certificateTemplate) {
@@ -331,14 +384,26 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             'SELECT is_offer_letter FROM certificate_templates WHERE id = $1',
             [certificateTemplate.id]
           );
-          const isOfferLetter = Boolean(offerLetterRow.rows[0]?.is_offer_letter);
+          isOfferLetter = Boolean(offerLetterRow.rows[0]?.is_offer_letter);
           const finalized = await finalizeCertificatePdf(renderedPdfPath, {
             verifyUrl: `${appBase}/verify/${publicId}`,
             publicId,
             signer: companyDsc,
+            companyName: batch.sender_name ?? undefined,
             addEmployeeField: isOfferLetter
           });
           await recordCertificateUsage(batch.company_id);
+
+          // Best-effort page-1 raster for the claim-page preview, done once here instead of on every
+          // page view. Never blocks issuance — a failure just means the claim page shows no preview.
+          let previewPngBuffer: Buffer | null = null;
+          try {
+            const preview = await renderCertificateBackgroundPreviewPage(renderedPdfPath, 1);
+            previewPngBuffer = preview.buffer;
+          } catch (error) {
+            console.warn('Certificate preview render failed, continuing without one:', error instanceof Error ? error.message : error);
+          }
+
           const issued = await issueCertificate({
             companyId: batch.company_id,
             batchId: batch.id,
@@ -350,7 +415,8 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             sourcePdfPath: renderedPdfPath,
             dataSnapshot: certificateContext as Record<string, unknown>,
             publicId,
-            signed: finalized.signed
+            signed: finalized.signed,
+            previewPngBuffer
           });
           claimUrl = `${appBase}/claim/${issued.claimToken}`;
         } else {
@@ -433,7 +499,10 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
         // Other document types: keep attaching the generated PDF(s).
         const emailAttachments = claimUrl ? extraAttachments : [...generatedAttachments, ...extraAttachments];
         const emailHtml = claimUrl
-          ? buildClaimEmailHtml(claimMessage, certificateContext, claimUrl)
+          ? buildClaimEmailHtml(claimMessage, certificateContext, claimUrl, {
+              companyName: batch.sender_name ?? 'CertiFlow',
+              isOfferLetter
+            })
           : buildEmailHtml(batch.email_message ?? '', certificateContext, batch.attachment_message ?? undefined);
         const emailSubject = claimUrl ? claimSubject : batch.name;
 

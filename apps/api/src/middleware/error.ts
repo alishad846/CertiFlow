@@ -15,6 +15,10 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
         : new AppError('Internal server error', 500);
   const message = error instanceof Error && !(error instanceof AppError) ? error.message : appError.message;
 
+  if (appError.statusCode >= 500) {
+    console.error(error);
+  }
+
   res.status(appError.statusCode).json({
     message,
     statusCode: appError.statusCode,

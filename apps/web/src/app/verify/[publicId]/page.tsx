@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { BadgeCheck, ShieldAlert, Clock, XCircle, Loader2 } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { BadgeCheck, ShieldAlert, Clock, XCircle, Loader2, UploadCloud } from 'lucide-react';
+import { apiFetch, apiUrl } from '@/lib/api';
 
 type Verification = {
   found: boolean;
@@ -37,6 +37,9 @@ export default function VerifyPage() {
   const publicId = String(params.publicId ?? '');
   const [data, setData] = useState<Verification | null>(null);
   const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState('');
+  const [checkResult, setCheckResult] = useState<{ matches: boolean; matchesCurrentVersion: boolean } | null>(null);
 
   useEffect(() => {
     apiFetch<Verification>(`/verify/${publicId}`)
@@ -44,6 +47,34 @@ export default function VerifyPage() {
       .catch(() => setData({ found: false }))
       .finally(() => setLoading(false));
   }, [publicId]);
+
+  const checkFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setChecking(true);
+    setCheckError('');
+    setCheckResult(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${apiUrl}/verify/${publicId}/check-file`, { method: 'POST', body: form });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message ?? 'Could not check this file.');
+      }
+      if (!json?.found) {
+        setCheckError('No record for this certificate id.');
+        return;
+      }
+      setCheckResult({ matches: Boolean(json.matches), matchesCurrentVersion: Boolean(json.matchesCurrentVersion) });
+    } catch (err) {
+      setCheckError(err instanceof Error ? err.message : 'Could not check this file.');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const meta = data?.status ? STATUS_META[data.status] ?? STATUS_META.issued : null;
   const StatusIcon = meta?.icon ?? BadgeCheck;
@@ -103,9 +134,42 @@ export default function VerifyPage() {
               </p>
             ) : null}
 
+            <div className="mt-8 rounded-2xl border border-[color:var(--color-border)] bg-paper-bright p-5">
+              <p className="eyebrow">Confirm this exact file</p>
+              <p className="mt-2 text-sm leading-6 text-ink-soft">
+                The record above only confirms this credential ID was issued by us — it does not confirm that a
+                particular PDF someone handed you is unaltered. Upload it to check its contents against our signed
+                record.
+              </p>
+              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-paper px-5 py-2.5 text-sm text-ink transition hover:border-bronze hover:text-bronze-deep">
+                {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                {checking ? 'Checking…' : 'Upload PDF to check'}
+                <input type="file" accept="application/pdf" className="hidden" onChange={checkFile} disabled={checking} />
+              </label>
+
+              {checkError ? <p className="mt-3 text-sm text-[#8f3325]">{checkError}</p> : null}
+
+              {checkResult ? (
+                checkResult.matchesCurrentVersion ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-[#3f6f4a]/25 bg-[#3f6f4a]/8 px-4 py-3 text-sm text-[#3f6f4a]">
+                    <BadgeCheck className="h-4 w-4" /> This file matches our signed record exactly. Not tampered.
+                  </div>
+                ) : checkResult.matches ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-bronze/30 bg-bronze/10 px-4 py-3 text-sm text-bronze-deep">
+                    <ShieldAlert className="h-4 w-4" /> This matches an older, superseded version of this certificate — not the current one.
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-[#a3412e]/25 bg-[#a3412e]/8 px-4 py-3 text-sm text-[#8f3325]">
+                    <XCircle className="h-4 w-4" /> This file does not match our records. It has been altered since it was issued — do not trust its contents.
+                  </div>
+                )
+              ) : null}
+            </div>
+
             <p className="mt-4 text-xs leading-6 text-ink-faint">
-              This page is the authoritative record for this certificate. Details shown here are served directly from
-              CertiFlow and cannot be altered by editing a downloaded copy.
+              This page is the authoritative record for this credential ID and cannot be altered by editing a
+              downloaded copy. It does not, by itself, prove a specific downloaded or printed file is unaltered —
+              use the check above for that.
             </p>
           </div>
         )}

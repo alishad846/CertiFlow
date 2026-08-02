@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/async-handler';
 import { AppError } from '../lib/errors';
@@ -8,6 +9,8 @@ import { requireAuth } from '../middleware/auth';
 import {
   getVerification,
   getCurrentVersionPdfPath,
+  getCurrentVersionPreviewPath,
+  checkFileIntegrity,
   logCertificateEvent,
   listCompanyCertificates,
   revokeCertificate
@@ -41,6 +44,19 @@ function clientIp(req: { ip?: string }) {
   return req.ip ?? null;
 }
 
+const integrityUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+    if (!ok) {
+      cb(new AppError('Upload the certificate PDF to check it.', 400));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
 // -------- Public verification (source of truth) --------
 router.get(
   '/verify/:publicId',
@@ -56,6 +72,32 @@ router.get(
       await logCertificateEvent(certificateId, 'verified', {
         ip: clientIp(req),
         userAgent: req.headers['user-agent'] ?? null
+      }).catch(() => undefined);
+    }
+    res.json(result);
+  })
+);
+
+// -------- Public file integrity check: does THIS exact file match what we issued? --------
+// A public-id/QR match only proves an id was issued — it says nothing about a file someone is
+// holding, which may have been edited after signing. This compares its SHA-256 against every
+// version we ever stored for the id, so edits (in any tool — Word, Photoshop, a PDF editor, a
+// scan-and-reprint) are caught even though the id/QR printed on the page still reads correctly.
+router.post(
+  '/verify/:publicId/check-file',
+  rateLimit({ windowMs: 60_000, max: 20, message: 'Too many file checks.' }),
+  integrityUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const parsed = publicIdSchema.safeParse(req.params.publicId);
+    if (!parsed.success || !req.file) {
+      throw new AppError('A certificate id and PDF file are required.', 400);
+    }
+    const { certificateId, ...result } = await checkFileIntegrity(parsed.data.toUpperCase(), req.file.buffer);
+    if (result.found && certificateId) {
+      await logCertificateEvent(certificateId, 'integrity_check', {
+        ip: clientIp(req),
+        userAgent: req.headers['user-agent'] ?? null,
+        detail: { matches: result.matches, matchesCurrentVersion: result.matchesCurrentVersion }
       }).catch(() => undefined);
     }
     res.json(result);
@@ -108,16 +150,46 @@ router.post(
   })
 );
 
+function extractClaimBearer(req: Request): string | undefined {
+  return req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7)
+    : typeof req.query.session === 'string'
+      ? req.query.session
+      : undefined;
+}
+
+// -------- Gated preview (claim session required) — the page-1 raster pre-rendered at issuance,
+// never the raw stored PDF --------
+router.get(
+  '/claim/:token/preview',
+  rateLimit({ windowMs: 60_000, max: 30, message: 'Too many preview requests.' }),
+  asyncHandler(async (req, res) => {
+    const bearer = extractClaimBearer(req);
+    if (!bearer) {
+      throw new AppError('A verified claim session is required.', 401);
+    }
+
+    const { certificateId } = verifyClaimSession(bearer);
+    const info = await getCurrentVersionPreviewPath(certificateId);
+    if (!info || !fs.existsSync(info.previewPath)) {
+      throw new AppError('Preview not available for this document.', 404);
+    }
+    if (info.status === 'revoked') {
+      throw new AppError('This certificate has been revoked and can no longer be previewed.', 403);
+    }
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'private, no-store');
+    fs.createReadStream(info.previewPath).pipe(res);
+  })
+);
+
 // -------- Gated download (claim session required) --------
 router.get(
   '/claim/:token/download',
   rateLimit({ windowMs: 60_000, max: 20, message: 'Too many downloads.' }),
   asyncHandler(async (req, res) => {
-    const bearer = req.headers.authorization?.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7)
-      : typeof req.query.session === 'string'
-        ? req.query.session
-        : undefined;
+    const bearer = extractClaimBearer(req);
     if (!bearer) {
       throw new AppError('A verified claim session is required.', 401);
     }

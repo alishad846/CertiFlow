@@ -1,6 +1,15 @@
 import fs from 'node:fs/promises';
 import QRCode from 'qrcode';
-import { PDFDocument, PDFName, PDFArray, PDFString, StandardFonts, rgb } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFName,
+  PDFArray,
+  PDFDict,
+  PDFNumber,
+  PDFString,
+  StandardFonts,
+  rgb
+} from 'pdf-lib';
 import signpdf from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
 import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
@@ -10,7 +19,11 @@ import { env } from '../config/env';
 /** The company's Digital Signature Certificate (DSC), decrypted for signing. */
 export type CompanySigner = { p12: Buffer; passphrase: string };
 
-async function stampQr(pdfBytes: Buffer, verifyUrl: string, publicId: string): Promise<Uint8Array> {
+/** A signature-field rectangle in PDF user space (origin bottom-left). */
+type FieldRect = { name: string; x: number; y: number; w: number; h: number };
+type QrBox = { x: number; y: number; size: number; margin: number };
+
+async function stampQr(pdfBytes: Buffer, verifyUrl: string, publicId: string): Promise<{ bytes: Uint8Array; qr: QrBox }> {
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const qrPng = await QRCode.toBuffer(verifyUrl, { margin: 1, width: 300 });
   const qrImage = await pdfDoc.embedPng(qrPng);
@@ -27,104 +40,127 @@ async function stampQr(pdfBytes: Buffer, verifyUrl: string, publicId: string): P
   page.drawImage(qrImage, { x, y: y + 10, width: qrSize, height: qrSize });
   page.drawText(publicId, { x, y: y + 1, size: Math.max(5, qrSize * 0.11), font, color: rgb(0.04, 0.11, 0.23) });
 
-  return pdfDoc.save({ useObjectStreams: false });
+  return { bytes: await pdfDoc.save({ useObjectStreams: false }), qr: { x, y, size: qrSize, margin } };
 }
 
 /**
- * Add an EMPTY, Adobe-recognised signature field (AcroForm /FT /Sig widget with no value) at the
- * given rectangle, plus a thin baseline + caption so a human knows where to sign. This is what lets
- * the authorized signatory or the candidate apply their own DSC later in Adobe / a signing utility.
+ * Create a standards-compliant, EMPTY (unsigned) AcroForm digital-signature field: a real
+ * `/FT /Sig` widget annotation with a visible rectangle and a normal-appearance (`/AP /N`) form
+ * XObject. This is exactly the placeholder shape an Indian Form-16 (or any signable) PDF ships — when
+ * opened in Adobe Acrobat Reader it renders the standard unsigned-signature appearance and lets the
+ * user click it and sign with their own Digital ID. Nothing here is a drawn picture of a signature;
+ * it is the actual interactive field the viewer owns.
+ *
+ * AcroForm is edited on the catalog directly (mirroring @signpdf) rather than via pdf-lib's getForm(),
+ * which does not model signature fields.
  */
-function addEmptySignatureField(
-  pdfDoc: PDFDocument,
-  opts: { name: string; caption: string; x: number; y: number; w: number; h: number }
-) {
+function addUnsignedSignatureField(pdfDoc: PDFDocument, rect: FieldRect) {
   const context = pdfDoc.context;
   const page = pdfDoc.getPage(0);
+  const rectArr = [rect.x, rect.y, rect.x + rect.w, rect.y + rect.h];
 
-  // Visible baseline + caption (drawn content; the widget itself is invisible until signed).
-  page.drawLine({
-    start: { x: opts.x, y: opts.y + opts.h },
-    end: { x: opts.x + opts.w, y: opts.y + opts.h },
-    thickness: 0.8,
-    color: rgb(0.55, 0.42, 0.28)
-  });
+  // Empty normal appearance. The BBox + empty Resources dict are the known Acrobat workaround that
+  // makes Reader render/repair the field's appearance instead of ignoring it.
+  const apStream = context.formXObject([], { BBox: rectArr, Resources: {} });
 
   const widget = context.obj({
     Type: 'Annot',
     Subtype: 'Widget',
     FT: 'Sig',
-    Rect: [opts.x, opts.y, opts.x + opts.w, opts.y + opts.h],
-    T: PDFString.of(opts.name),
+    Rect: rectArr,
+    T: PDFString.of(rect.name),
     F: 4, // Print
-    P: page.ref
+    P: page.ref,
+    AP: { N: context.register(apStream) }
   });
   const widgetRef = context.register(widget);
 
-  // Attach the widget to the page's annotations.
-  const existing = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray);
-  if (existing) existing.push(widgetRef);
+  const annots = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray);
+  if (annots) annots.push(widgetRef);
   else page.node.set(PDFName.of('Annots'), context.obj([widgetRef]));
 
-  // Ensure an AcroForm exists, mark it as containing signatures, and register the field.
-  const form = pdfDoc.getForm();
-  const acroDict = form.acroForm.dict;
-  const fields = acroDict.lookupMaybe(PDFName.of('Fields'), PDFArray) ?? context.obj([]);
-  fields.push(widgetRef);
-  acroDict.set(PDFName.of('Fields'), fields);
+  let acroForm = pdfDoc.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict);
+  if (!acroForm) {
+    acroForm = context.obj({ Fields: [] });
+    pdfDoc.catalog.set(PDFName.of('AcroForm'), context.register(acroForm));
+  }
+  const existingFlags = acroForm.lookupMaybe(PDFName.of('SigFlags'), PDFNumber);
   // SigFlags 3 = SignaturesExist | AppendOnly, so viewers offer the signing UI.
-  acroDict.set(PDFName.of('SigFlags'), context.obj(3));
-
-  return opts.caption; // caption is drawn by the caller if desired; returned for clarity
+  acroForm.set(PDFName.of('SigFlags'), PDFNumber.of((existingFlags?.asNumber() ?? 0) | 3));
+  let fields = acroForm.lookupMaybe(PDFName.of('Fields'), PDFArray);
+  if (!fields) {
+    fields = context.obj([]) as PDFArray;
+    acroForm.set(PDFName.of('Fields'), fields);
+  }
+  fields.push(widgetRef);
 }
 
 export type FinalizeResult = { signed: boolean };
 
 /**
  * Post-process an issued PDF in place:
- *  1. Always stamp the verification QR + credential ID.
- *  2. Add an "Authorized Signatory" signature field; if a company DSC is supplied, PAdES-sign it
- *     server-side (bulk auto-sign). Otherwise leave it empty for manual Adobe signing.
- *  3. For offer letters, add a second empty "Accepted by (Candidate)" field for the recipient to
- *     counter-sign in Adobe after they verify.
+ *  1. Stamp the verification QR + credential id in the bottom-right.
+ *  2. Place a real interactive digital-signature field in the bottom-left:
+ *     - With a company DSC: a VISIBLE PAdES signature field is placed and signed server-side. Adobe
+ *       renders its own signature appearance on it — for a self-issued DSC that is the familiar
+ *       "?" / "Signature not verified" state, on a genuine (cryptographically valid, tamper-evident)
+ *       `/Sig` field, not a drawn badge.
+ *     - Without a DSC: an EMPTY `/Sig` field so the signatory can sign it in Adobe with their Digital ID.
+ *  3. For offer letters, additionally add an empty "Accepted by (Candidate)" `/Sig` field the recipient
+ *     clicks to counter-sign in Adobe after verifying.
  * Signing failures fall back to the QR-stamped PDF so issuance never breaks.
  */
 export async function finalizeCertificatePdf(
   pdfPath: string,
-  opts: { verifyUrl: string; publicId: string; signer?: CompanySigner | null; addEmployeeField?: boolean }
+  opts: {
+    verifyUrl: string;
+    publicId: string;
+    signer?: CompanySigner | null;
+    companyName?: string;
+    addEmployeeField?: boolean;
+  }
 ): Promise<FinalizeResult> {
   const original = await fs.readFile(pdfPath);
-  const stamped = Buffer.from(await stampQr(original, opts.verifyUrl, opts.publicId));
+  const { bytes: qrStampedBytes, qr } = await stampQr(original, opts.verifyUrl, opts.publicId);
+  const stamped = Buffer.from(qrStampedBytes);
 
-  // Lay out the fields relative to the page so it works for any template size.
   const layoutDoc = await PDFDocument.load(stamped);
-  const { width, height } = layoutDoc.getPage(0).getSize();
-  const fieldW = width * 0.3;
-  const fieldH = height * 0.045;
-  const baseY = height * 0.11;
-  const employerRect = { name: 'AuthorizedSignatory', caption: 'Authorized Signatory', x: width * 0.1, y: baseY, w: fieldW, h: fieldH };
-  const employeeRect = { name: 'CandidateAcceptance', caption: 'Accepted by (Candidate)', x: width * 0.42, y: baseY, w: fieldW, h: fieldH };
+  const { width } = layoutDoc.getPage(0).getSize();
+
+  // Signature field(s) sit in the bottom-left, mirroring the QR in the bottom-right.
+  const sigW = Math.min(width * 0.34, 215);
+  const employerRect: FieldRect = { name: 'AuthorizedSignatory', x: qr.margin, y: qr.y, w: sigW, h: qr.size };
+  const candidateRect: FieldRect = {
+    name: 'CandidateAcceptance',
+    x: qr.margin,
+    y: qr.y + qr.size + 12,
+    w: sigW,
+    h: Math.max(34, qr.size * 0.5)
+  };
+  const signerDisplayName = opts.companyName ? `${opts.companyName} (Authorized Signatory)` : 'Authorized Signatory';
 
   if (!env.CERT_SIGNING_ENABLED) {
-    // Signing globally off — still prepare empty fields so documents can be signed in Adobe.
-    addEmptySignatureField(layoutDoc, employerRect);
-    if (opts.addEmployeeField) addEmptySignatureField(layoutDoc, employeeRect);
+    addUnsignedSignatureField(layoutDoc, employerRect);
+    if (opts.addEmployeeField) addUnsignedSignatureField(layoutDoc, candidateRect);
     await fs.writeFile(pdfPath, Buffer.from(await layoutDoc.save({ useObjectStreams: false })));
     return { signed: false };
   }
 
   try {
     if (opts.signer) {
-      // Add the empty employee field first (part of the content the employer signature will cover),
-      // then add the employer placeholder and sign it with the company DSC.
-      if (opts.addEmployeeField) addEmptySignatureField(layoutDoc, employeeRect);
+      // The candidate field must exist BEFORE we sign, so it is covered by the employer signature.
+      if (opts.addEmployeeField) addUnsignedSignatureField(layoutDoc, candidateRect);
+
+      // VISIBLE PAdES signature for the authorized signatory (widgetRect makes it an on-page field, not
+      // the library default invisible [0,0,0,0] one). Adobe draws its signature/validity appearance here.
       pdflibAddPlaceholder({
         pdfDoc: layoutDoc,
         reason: `Issued & verifiable at ${opts.verifyUrl}`,
         contactInfo: 'verify.certiflow',
-        name: 'Authorized Signatory',
+        name: signerDisplayName,
         location: 'CertiFlow',
-        subFilter: SUBFILTER_ETSI_CADES_DETACHED
+        subFilter: SUBFILTER_ETSI_CADES_DETACHED,
+        widgetRect: [employerRect.x, employerRect.y, employerRect.x + employerRect.w, employerRect.y + employerRect.h]
       });
       const withPlaceholder = Buffer.from(await layoutDoc.save({ useObjectStreams: false }));
       const signer = new P12Signer(opts.signer.p12, { passphrase: opts.signer.passphrase });
@@ -133,9 +169,9 @@ export async function finalizeCertificatePdf(
       return { signed: true };
     }
 
-    // No company DSC: prepare empty fields for manual Adobe signing (employer + optional employee).
-    addEmptySignatureField(layoutDoc, employerRect);
-    if (opts.addEmployeeField) addEmptySignatureField(layoutDoc, employeeRect);
+    // No DSC: leave the authorized-signatory field empty so it can be signed in Adobe.
+    addUnsignedSignatureField(layoutDoc, employerRect);
+    if (opts.addEmployeeField) addUnsignedSignatureField(layoutDoc, candidateRect);
     await fs.writeFile(pdfPath, Buffer.from(await layoutDoc.save({ useObjectStreams: false })));
     return { signed: false };
   } catch (error) {

@@ -38,11 +38,23 @@ export type ClaimContext = {
   maskedEmail: string;
   recipientName: string;
   companyName: string;
-  title: string | null;
+  /** Generic document kind — never the internal template name (e.g. "Classic Navy"). */
+  documentType: 'certificate' | 'offer_letter';
+  /** Recipient-specific context line (course / program / role), not a template identifier. */
+  program: string | null;
   publicId: string;
 };
 
-/** Public metadata to render the claim page — never leaks the full email. */
+function pickProgram(metadata: Record<string, unknown> | null, isOfferLetter: boolean): string | null {
+  if (!metadata) return null;
+  const value = isOfferLetter
+    ? metadata.role ?? metadata.position
+    : metadata.course ?? metadata.role;
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed || null;
+}
+
+/** Public metadata to render the claim page — never leaks the full email or internal template name. */
 export async function getClaimContext(rawToken: string): Promise<ClaimContext> {
   const claim = await loadClaimByToken(rawToken);
   if (!claim) {
@@ -51,13 +63,17 @@ export async function getClaimContext(rawToken: string): Promise<ClaimContext> {
 
   const cert = await pool.query<{
     recipient_name: string;
-    title: string | null;
     public_id: string;
     status: string;
     company_name: string;
+    metadata: Record<string, unknown> | null;
+    is_offer_letter: boolean | null;
   }>(
-    `SELECT c.recipient_name, c.title, c.public_id, c.status, co.name AS company_name
-     FROM certificates c INNER JOIN companies co ON co.id = c.company_id
+    `SELECT c.recipient_name, c.public_id, c.status, co.name AS company_name, c.metadata,
+            ct.is_offer_letter
+     FROM certificates c
+     INNER JOIN companies co ON co.id = c.company_id
+     LEFT JOIN certificate_templates ct ON ct.id = c.template_id
      WHERE c.id = $1`,
     [claim.certificate_id]
   );
@@ -73,12 +89,15 @@ export async function getClaimContext(rawToken: string): Promise<ClaimContext> {
     status = 'expired';
   }
 
+  const isOfferLetter = Boolean(row.is_offer_letter);
+
   return {
     status,
     maskedEmail: maskEmail(claim.email_on_record),
     recipientName: row.recipient_name,
     companyName: row.company_name,
-    title: row.title,
+    documentType: isOfferLetter ? 'offer_letter' : 'certificate',
+    program: pickProgram(row.metadata, isOfferLetter),
     publicId: row.public_id
   };
 }

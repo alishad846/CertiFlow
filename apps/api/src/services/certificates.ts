@@ -26,6 +26,8 @@ export type IssueCertificateInput = {
   publicId?: string;
   /** Whether the source PDF is digitally signed. */
   signed?: boolean;
+  /** Page-1 raster of the final PDF, pre-rendered at issuance for the claim-page preview. Best-effort. */
+  previewPngBuffer?: Buffer | null;
 };
 
 /** Reserve a collision-free public credential id (used before rendering the QR). */
@@ -50,6 +52,10 @@ function certVersionPath(companyId: string, certificateId: string, versionNo: nu
   // Lives under CERT_STORE_DIR which is NEVER statically served — download is
   // only possible through the claim-verified streaming endpoint.
   return path.join(env.CERT_STORE_DIR, companyId, certificateId, `v${versionNo}.pdf`);
+}
+
+function certVersionPreviewPath(companyId: string, certificateId: string, versionNo: number) {
+  return path.join(env.CERT_STORE_DIR, companyId, certificateId, `v${versionNo}-preview.png`);
 }
 
 /**
@@ -94,6 +100,9 @@ export async function issueCertificate(input: IssueCertificateInput): Promise<Is
         const storedPath = certVersionPath(input.companyId, id, 1);
         await ensureDir(path.dirname(storedPath));
         await fs.writeFile(storedPath, pdfBuffer);
+        if (input.previewPngBuffer) {
+          await fs.writeFile(certVersionPreviewPath(input.companyId, id, 1), input.previewPngBuffer);
+        }
 
         await client.query(
           `INSERT INTO certificate_versions
@@ -209,6 +218,54 @@ export async function getVerification(publicId: string): Promise<VerificationRes
   };
 }
 
+export type FileIntegrityResult = {
+  found: boolean;
+  /** Internal id for audit logging only — stripped before sending to clients. */
+  certificateId?: string;
+  status?: string;
+  /** True iff the uploaded file's SHA-256 matches ANY issued version's stored hash. */
+  matches?: boolean;
+  /** True iff it matches the CURRENT version specifically (superseded versions still count as "matches: true" but not current). */
+  matchesCurrentVersion?: boolean;
+  matchedVersionNo?: number | null;
+  matchedVersionSigned?: boolean;
+};
+
+/**
+ * Compare an uploaded file's SHA-256 against every version we ever issued for this credential id.
+ * This is the actual tamper check — the public /verify/:publicId lookup only confirms an id exists
+ * and returns what we have on record, it says nothing about a specific file in someone's hands. A
+ * QR/ID match alone does NOT prove a physical or downloaded copy is unmodified.
+ */
+export async function checkFileIntegrity(publicId: string, fileBuffer: Buffer): Promise<FileIntegrityResult> {
+  const sha256 = sha256Hex(fileBuffer);
+
+  const certResult = await pool.query<{ id: string; status: string; current_version: number }>(
+    `SELECT id, status, current_version FROM certificates WHERE public_id = $1`,
+    [publicId]
+  );
+  const cert = certResult.rows[0];
+  if (!cert) {
+    return { found: false };
+  }
+
+  const versions = await pool.query<{ version_no: number; pdf_sha256: string; signed: boolean }>(
+    `SELECT version_no, pdf_sha256, signed FROM certificate_versions WHERE certificate_id = $1`,
+    [cert.id]
+  );
+  const matched = versions.rows.find((v) => v.pdf_sha256 === sha256) ?? null;
+
+  return {
+    found: true,
+    certificateId: cert.id,
+    status: cert.status,
+    matches: Boolean(matched),
+    matchesCurrentVersion: matched?.version_no === cert.current_version,
+    matchedVersionNo: matched?.version_no ?? null,
+    matchedVersionSigned: Boolean(matched?.signed)
+  };
+}
+
 /** Current version's gated PDF path + certificate status (download guards on status). */
 export async function getCurrentVersionPdfPath(
   certificateId: string
@@ -223,6 +280,22 @@ export async function getCurrentVersionPdfPath(
   );
   const row = result.rows[0];
   return row ? { pdfPath: row.pdf_path, status: row.status } : null;
+}
+
+/** Pre-rendered page-1 preview for the current version, if one was generated at issuance. */
+export async function getCurrentVersionPreviewPath(
+  certificateId: string
+): Promise<{ previewPath: string; status: string } | null> {
+  const result = await pool.query<{ company_id: string; current_version: number; status: string }>(
+    `SELECT company_id, current_version, status FROM certificates WHERE id = $1`,
+    [certificateId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    previewPath: certVersionPreviewPath(row.company_id, certificateId, row.current_version),
+    status: row.status
+  };
 }
 
 export type CertificateListItem = {
