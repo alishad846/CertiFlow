@@ -40,22 +40,48 @@ router.get(
           batches: 'SELECT COUNT(*)::int AS count FROM batches'
         };
 
-    const [documents, sent, failed, pending, credits, batches] = await Promise.all([
+    // 14-day issued-vs-claimed certificate series for the dashboard trend chart.
+    const certsSeriesQuery = companyFilter
+      ? `SELECT to_char(gs, 'YYYY-MM-DD') AS date,
+           (SELECT COUNT(*)::int FROM certificates c WHERE c.company_id = $1 AND c.issued_at::date = gs::date) AS issued,
+           (SELECT COUNT(*)::int FROM certificates c WHERE c.company_id = $1 AND c.claimed_at::date = gs::date) AS claimed
+         FROM generate_series(CURRENT_DATE - interval '13 days', CURRENT_DATE, interval '1 day') gs
+         ORDER BY gs`
+      : `SELECT to_char(gs, 'YYYY-MM-DD') AS date,
+           (SELECT COUNT(*)::int FROM certificates c WHERE c.issued_at::date = gs::date) AS issued,
+           (SELECT COUNT(*)::int FROM certificates c WHERE c.claimed_at::date = gs::date) AS claimed
+         FROM generate_series(CURRENT_DATE - interval '13 days', CURRENT_DATE, interval '1 day') gs
+         ORDER BY gs`;
+
+    const [documents, sent, failed, pending, credits, batches, certsSeries] = await Promise.all([
       pool.query(statsQuery.documents, companyFilter ? [companyFilter] : []),
       pool.query(statsQuery.sent, companyFilter ? [companyFilter] : []),
       pool.query(statsQuery.failed, companyFilter ? [companyFilter] : []),
       pool.query(statsQuery.pending, companyFilter ? [companyFilter] : []),
       pool.query(statsQuery.credits, companyFilter ? [companyFilter] : []),
-      pool.query(statsQuery.batches, companyFilter ? [companyFilter] : [])
+      pool.query(statsQuery.batches, companyFilter ? [companyFilter] : []),
+      pool.query(certsSeriesQuery, companyFilter ? [companyFilter] : [])
     ]);
+
+    const emailsSent = sent.rows[0]?.count ?? 0;
+    const failedEmails = failed.rows[0]?.count ?? 0;
+    const pendingEmails = pending.rows[0]?.count ?? 0;
 
     res.json({
       totalGeneratedDocuments: documents.rows[0]?.count ?? 0,
       remainingCredits: credits.rows[0]?.credits ?? 0,
-      emailsSent: sent.rows[0]?.count ?? 0,
-      failedEmails: failed.rows[0]?.count ?? 0,
-      pendingEmails: pending.rows[0]?.count ?? 0,
-      totalBatches: batches.rows[0]?.count ?? 0
+      emailsSent,
+      failedEmails,
+      pendingEmails,
+      totalBatches: batches.rows[0]?.count ?? 0,
+      // Delivery breakdown for the donut chart.
+      delivery: { sent: emailsSent, failed: failedEmails, pending: pendingEmails },
+      // Issued vs claimed over the last 14 days for the trend chart.
+      certificates: certsSeries.rows.map((r) => ({
+        date: r.date as string,
+        issued: Number(r.issued ?? 0),
+        claimed: Number(r.claimed ?? 0)
+      }))
     });
   })
 );

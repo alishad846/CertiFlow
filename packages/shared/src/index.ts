@@ -7,6 +7,12 @@ export type CompanyStatus = 'active' | 'blocked';
 export * from './billing';
 export * from './subscription';
 
+export interface CertificateSeriesPoint {
+  date: string;
+  issued: number;
+  claimed: number;
+}
+
 export interface DashboardStats {
   totalGeneratedDocuments: number;
   remainingCredits: number;
@@ -14,6 +20,8 @@ export interface DashboardStats {
   failedEmails: number;
   pendingEmails: number;
   totalBatches: number;
+  delivery?: { sent: number; failed: number; pending: number };
+  certificates?: CertificateSeriesPoint[];
 }
 
 export interface BatchSummary {
