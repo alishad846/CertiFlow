@@ -131,11 +131,31 @@ async function verifyCourseraLink(
       .replace(/&amp;/g, '&')
       .replace(/&#x27;/g, "'")
       .replace(/&quot;/g, '"');
+    const nameSearchTerms = [
+  'Completed by',
+  'Awarded to',
+  'Issued to',
+  'recipientName',
+  'learnerName',
+  'fullName',
+  'profileName',
+];
+
+for (const term of nameSearchTerms) {
+  const index = decodedHtml.toLowerCase().indexOf(term.toLowerCase());
+
+  if (index !== -1) {
+    console.log(
+      `Coursera HTML near "${term}":`,
+      decodedHtml.slice(Math.max(0, index - 150), index + 300),
+    );
+  }
+}  
 
     const namePatterns = [
-  /Completed by\s*([^<"\n]{2,100})/i,
-  /Awarded to\s*([^<"\n]{2,100})/i,
-  /Issued to\s*([^<"\n]{2,100})/i,
+  /Completed by\s*<strong>([^<]{2,100})<\/strong>/i,
+  /Awarded to\s*<strong>([^<]{2,100})<\/strong>/i,
+  /Issued to\s*<strong>([^<]{2,100})<\/strong>/i,
   /"recipientName"\s*:\s*"([^"]{2,100})"/i,
   /"learnerName"\s*:\s*"([^"]{2,100})"/i,
   /"name"\s*:\s*"([^"]{2,100})"/i,
@@ -158,19 +178,24 @@ for (const pattern of namePatterns) {
     .trim();
 
   const invalidNames = [
-    'coursera',
-    'course certificate',
-    'certificate',
-    'name',
-    'online courses',
-  ];
+  'coursera',
+  'course certificate',
+  'certificate',
+  'name',
+  'online courses',
+  'unknown',
+  'null',
+  'undefined',
+];
 
-  const isValidName =
-    possibleName.length >= 3 &&
-    possibleName.length <= 100 &&
-    !invalidNames.includes(possibleName.toLowerCase()) &&
-    !possibleName.toLowerCase().includes('certificate') &&
-    !possibleName.startsWith('http');
+  const cleanedName = possibleName.trim().toLowerCase();
+
+const isValidName =
+  possibleName.length >= 3 &&
+  possibleName.length <= 100 &&
+  !invalidNames.includes(cleanedName) &&
+  !cleanedName.includes('certificate') &&
+  !possibleName.startsWith('http');
 
   if (isValidName) {
     detectedStudentName = possibleName;
@@ -186,12 +211,15 @@ for (const pattern of namePatterns) {
       /Course Certificate/i.test(decodedHtml) ||
       /account is verified/i.test(decodedHtml) ||
       /successful completion/i.test(decodedHtml);
-
-    if (
+console.log('Detected Coursera student name:', detectedStudentName);
+    const hasStrongVerificationEvidence =
       officialFinalDomain &&
       isVerificationPage &&
-      hasCertificateEvidence
-    ) {
+      hasCertificateEvidence &&
+      !!certificateIdMatch?.[1] &&
+      detectedStudentName !== 'Name not detected';
+
+    if (hasStrongVerificationEvidence) {
       return {
         status: 'verified',
         trustScore: 100,
@@ -203,7 +231,7 @@ for (const pattern of namePatterns) {
           certificateIdMatch?.[1] || 'ID not detected',
         verifiedUrl: finalUrl.toString(),
         reason:
-          'Certificate was found on an official Coursera verification page',
+          'Certificate was found on an official Coursera verification page with strong identity evidence',
       };
     }
 
@@ -219,6 +247,315 @@ for (const pattern of namePatterns) {
     console.error('Coursera verification failed:', error);
     return invalidResult;
   }
+}
+
+type DocumentType = 'Certificate' | 'Offer Letter' | 'Resume' | 'Unknown Document';
+
+type DocumentAnalysis = {
+  documentType: DocumentType;
+  studentName: string;
+  publicId: string | null;
+  trustScore: number;
+  trustReasons: string[];
+  tamperScore: number;
+  tamperReasons: string[];
+  hasExtractedText: boolean;
+  appearsToBeCertificate: boolean;
+  appearsToBeOfferLetter: boolean;
+  appearsToBeResume: boolean;
+};
+
+export function normalizeCandidateName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function classifyDocumentText(extractedText: string): DocumentAnalysis {
+  const normalizedText = extractedText.toLowerCase();
+  const hasExtractedText = extractedText.trim().length > 0;
+
+  const certificateKeywords = [
+    'certificate',
+    'certifies that',
+    'awarded to',
+    'presented to',
+    'course completion',
+    'credential id',
+    'certificate id',
+  ];
+
+  const offerLetterKeywords = [
+    'offer letter',
+    'letter of offer',
+    'employment offer',
+    'offer of employment',
+    'position of',
+    'date of joining',
+    'joining date',
+    'annual compensation',
+    'salary',
+    'human resources',
+    'terms and conditions',
+  ];
+
+  const resumeKeywords = [
+    'summary',
+    'experience',
+    'education',
+    'skills',
+    'projects',
+    'professional summary',
+    'employment history',
+    'work experience',
+    'phone',
+    'email',
+  ];
+
+  const appearsToBeCertificate = certificateKeywords.some((keyword) =>
+    normalizedText.includes(keyword),
+  );
+
+  const appearsToBeOfferLetter = offerLetterKeywords.some((keyword) =>
+    normalizedText.includes(keyword),
+  );
+
+  const appearsToBeResume = resumeKeywords.some((keyword) =>
+    normalizedText.includes(keyword),
+  );
+
+  const documentType: DocumentType = appearsToBeCertificate
+    ? 'Certificate'
+    : appearsToBeOfferLetter
+      ? 'Offer Letter'
+      : appearsToBeResume
+        ? 'Resume'
+        : 'Unknown Document';
+
+  const publicIdMatch = extractedText.match(
+    /\bCF-[0-9A-Z]{4,8}-[0-9A-Z]{2,6}\b/i,
+  );
+
+  const publicId = publicIdMatch?.[0]?.toUpperCase() ?? null;
+
+  const labelledNamePatterns = [
+    /^([A-Z][A-Z\s.'-]{3,60})$/m,
+    /(?:student\s*name|recipient\s*name|candidate\s*name)\s*[:\-]\s*(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
+    /(?:awarded\s+to|presented\s+to|certifies\s+that|this\s+is\s+to\s+certify\s+that)\s+(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
+    /Dear\s+([A-Za-z][A-Za-z .'-]{2,60})/i,
+    /Employee\s*Name\s*[:\-]\s*([A-Za-z][A-Za-z .'-]{2,60})/i,
+  ];
+
+  let studentName = 'Name not detected';
+
+  for (const pattern of labelledNamePatterns) {
+    const match = extractedText.match(pattern);
+
+    if (match?.[1]) {
+      const detectedName = match[1].trim();
+      const invalidValues = [
+        'date',
+        'job title',
+        'first name',
+        'last name',
+        'middle initial',
+        'name',
+      ];
+
+      const isInvalidName =
+        invalidValues.includes(detectedName.toLowerCase()) ||
+        detectedName.includes('_') ||
+        detectedName.length < 3;
+
+      if (!isInvalidName) {
+        studentName = detectedName;
+        break;
+      }
+    }
+  }
+
+  const trustReasons: string[] = [];
+  let trustScore = 0;
+  const tamperReasons: string[] = [];
+let tamperScore = 0;
+
+  if (hasExtractedText) {
+    trustScore += 10;
+    trustReasons.push('Document text was successfully extracted');
+  }
+
+  if (appearsToBeCertificate) {
+    trustScore += 20;
+    trustReasons.push('Certificate-related content was detected');
+  }
+
+  if (appearsToBeOfferLetter) {
+    trustScore += 20;
+    trustReasons.push('Offer-letter-related content was detected');
+  }
+
+  if (appearsToBeResume) {
+    trustScore += 20;
+    trustReasons.push('Resume-related content was detected');
+  }
+
+  const hasOfficialEmail = /\b[A-Z0-9._%+-]+@(?!gmail\.com|yahoo\.com|outlook\.com|hotmail\.com)[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(
+    extractedText,
+  );
+
+  if (hasOfficialEmail) {
+    trustScore += 20;
+    trustReasons.push('Official organization email domain was detected');
+  }
+
+  const hasSignatureEvidence =
+    normalizedText.includes('authorized signatory') ||
+    normalizedText.includes('human resources') ||
+    normalizedText.includes('hr manager') ||
+    normalizedText.includes('signature');
+
+  if (hasSignatureEvidence) {
+    trustScore += 15;
+    trustReasons.push('Signature or HR authorization evidence was detected');
+  }
+
+  const hasDateEvidence =
+    /\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/.test(extractedText) ||
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i.test(
+      extractedText,
+    );
+
+  if (hasDateEvidence) {
+    trustScore += 10;
+    trustReasons.push('Document date was detected');
+  }
+
+  if (publicId) {
+    trustScore += 25;
+    trustReasons.push('CertiFlow certificate ID was detected');
+  }
+  if (appearsToBeCertificate) {
+  if (!publicId) {
+    tamperScore += 25;
+    tamperReasons.push(
+      'No CertiFlow certificate ID was detected',
+    );
+  }
+
+  if (studentName === 'Name not detected') {
+    tamperScore += 25;
+    tamperReasons.push(
+      'Certificate holder name could not be detected',
+    );
+  }
+
+  const hasCertificateDate =
+    /\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/.test(extractedText) ||
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i.test(
+      extractedText,
+    );
+
+  if (!hasCertificateDate) {
+    tamperScore += 15;
+    tamperReasons.push(
+      'Certificate issue date was not detected',
+    );
+  }
+
+  const hasIssuerEvidence =
+    normalizedText.includes('university') ||
+    normalizedText.includes('institute') ||
+    normalizedText.includes('academy') ||
+    normalizedText.includes('coursera') ||
+    normalizedText.includes('organization') ||
+    normalizedText.includes('company');
+
+  if (!hasIssuerEvidence) {
+    tamperScore += 20;
+    tamperReasons.push(
+      'Certificate issuer information was not detected',
+    );
+  }
+}
+
+  return {
+    documentType,
+    studentName,
+    publicId,
+    trustScore: Math.min(trustScore, 100),
+    trustReasons,
+    tamperScore: Math.min(tamperScore, 100),
+    tamperReasons,
+    hasExtractedText,
+    appearsToBeCertificate,
+    appearsToBeOfferLetter,
+    appearsToBeResume,
+
+  };
+}
+
+export function applyCandidateNameMatching<T extends {
+  student: string;
+  status: string;
+  reason: string;
+  documentType?: string;
+  trustScore?: number;
+}>(results: T[], resumeNames: string[]): T[] {
+  const normalizedResumeNames = Array.from(
+    new Set(
+      resumeNames
+        .map((name) => normalizeCandidateName(name))
+        .filter(Boolean),
+    ),
+  );
+
+  return results.map((result) => {
+    const isVerifiableDocument =
+      result.documentType === 'Certificate' ||
+      result.documentType === 'Course Certificate' ||
+      result.documentType === 'Offer Letter';
+
+    if (!isVerifiableDocument) {
+      return result;
+    }
+
+    if (
+      result.student === 'Name not detected' ||
+      result.student === 'unknown'
+    ) {
+      return {
+        ...result,
+        status: result.status === 'Verified' ? 'Fake' : result.status,
+        reason: `${result.reason}. Candidate name could not be confirmed against the uploaded resume.`,
+      };
+    }
+
+    if (normalizedResumeNames.length === 0) {
+      return {
+        ...result,
+        reason: `${result.reason}. No candidate resume was available for name matching.`,
+      };
+    }
+
+    const documentName = normalizeCandidateName(result.student);
+    const hasMatchingResume = normalizedResumeNames.includes(documentName);
+
+    if (!hasMatchingResume) {
+      return {
+        ...result,
+        status: 'Fake',
+        trustScore: Math.min(result.trustScore ?? 0, 30),
+        reason: `${result.reason}. Candidate name does not match any uploaded resume.`,
+      };
+    }
+
+    return {
+      ...result,
+      reason: `${result.reason}. Candidate name matches an uploaded resume.`,
+    };
+  });
 }
 
 const router = Router();
@@ -277,7 +614,7 @@ router.post(
           message: 'Upload at least one certificate or provide a link',
         });
       }
-
+    
       const fileResults = await Promise.all(
         files.map(async (file) => {
           let extractedText = '';
@@ -297,9 +634,17 @@ router.post(
               console.log('==============================');
 
               const labelledNamePatterns = [
-                /(?:student\s*name|recipient\s*name|candidate\s*name|employee\s*name)\s*[:\-]\s*(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
-                /(?:awarded\s+to|presented\s+to|certifies\s+that|this\s+is\s+to\s+certify\s+that)\s+(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
-              ];
+  // Resume
+  /^([A-Z][A-Z\s.'-]{3,60})$/m,
+
+  // Certificate
+  /(?:student\s*name|recipient\s*name|candidate\s*name)\s*[:\-]\s*(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
+  /(?:awarded\s+to|presented\s+to|certifies\s+that|this\s+is\s+to\s+certify\s+that)\s+(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
+
+  // Offer Letter
+  /Dear\s+([A-Za-z][A-Za-z .'-]{2,60})/i,
+  /Employee\s*Name\s*[:\-]\s*([A-Za-z][A-Za-z .'-]{2,60})/i,
+];
 
               for (const pattern of labelledNamePatterns) {
                 const match = extractedText.match(pattern);
@@ -370,6 +715,20 @@ const offerLetterKeywords = [
   'human resources',
   'terms and conditions',
 ];
+const resumeKeywords = [
+  'career objective',
+  'professional summary',
+  'education',
+  'technical skills',
+  'work experience',
+  'projects',
+  'academic interests',
+  'soft skills',
+  'curriculum vitae',
+  'resume',
+  'github',
+  'linkedin',
+];
 
 const appearsToBeCertificate = certificateKeywords.some((keyword) =>
   normalizedText.includes(keyword),
@@ -378,12 +737,19 @@ const appearsToBeCertificate = certificateKeywords.some((keyword) =>
 const appearsToBeOfferLetter = offerLetterKeywords.some((keyword) =>
   normalizedText.includes(keyword),
 );
+const resumeMatchCount = resumeKeywords.filter((keyword) =>
+  normalizedText.includes(keyword),
+).length;
+
+const appearsToBeResume = resumeMatchCount >= 3;
 
 const documentType = appearsToBeCertificate
   ? 'Certificate'
   : appearsToBeOfferLetter
     ? 'Offer Letter'
-    : 'Unknown Document';
+    : appearsToBeResume
+      ? 'Resume'
+      : 'Unknown Document';
     let trustScore = 0;
 const trustReasons: string[] = [];
 
@@ -452,8 +818,25 @@ if (!hasExtractedText) {
     trustScore,
   };
 }
+if (appearsToBeResume) {
 
-if (!appearsToBeCertificate && !appearsToBeOfferLetter) {
+
+  return {
+    student: studentName,
+    certificateId: 'Not applicable',
+    status: 'Pending',
+    reason:
+      'Resume detected. Waiting for an attached certificate or verification link.',
+    source: file.originalname,
+    documentType,
+    trustScore,
+  };
+}
+if (
+  !appearsToBeCertificate &&
+  !appearsToBeOfferLetter &&
+  !appearsToBeResume
+) {
   return {
     student: studentName,
     certificateId: 'Not detected',
@@ -527,7 +910,7 @@ if (trustScore >= 80) {
 return {
   student: studentName,
   certificateId: publicId,
-  status: 'finalStatus',
+  status: finalStatus,
   reason: `Certificate ID matched a valid CertiFlow record. ${trustReasons.join(', ')}`,
   source: file.originalname,
   documentType,
@@ -595,10 +978,25 @@ switch (provider) {
   ),
 );
 
-      return res.status(200).json({
-        success: true,
-        results: [...fileResults, ...linkResults],
-      });
+      
+
+const resumeNames = fileResults
+  .filter(
+    (result) =>
+      result.documentType === 'Resume' &&
+      result.student !== 'Name not detected',
+  )
+  .map((result) => result.student);
+
+const combinedResults = applyCandidateNameMatching(
+  [...fileResults, ...linkResults],
+  resumeNames,
+);
+
+return res.status(200).json({
+  success: true,
+  results: combinedResults,
+});
     } catch (error) {
       console.error('Bulk verification error:', error);
 
