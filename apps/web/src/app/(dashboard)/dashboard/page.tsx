@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Building2, FileUp, ScrollText, WalletCards, Palette, BadgePercent } from 'lucide-react';
+import { ArrowUpRight, Building2, FileUp, ShieldCheck, WalletCards, Palette, BadgePercent } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,12 +106,12 @@ export default function DashboardPage() {
         <StatTile label="Pending" value={stats.pendingEmails} hint="In the send queue" />
       </div>
 
-      <CompanyAnalytics />
+      <CompanyAnalytics stats={stats} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <QuickLink href="/uploads" icon={FileUp} label="New batch" hint="Upload & send" />
         <QuickLink href="/certificate-editor" icon={Palette} label="Editor" hint="Design a template" />
-        <QuickLink href="/logs" icon={ScrollText} label="Delivery logs" hint="Track every email" />
+        <QuickLink href="/bulk-verification" icon={ShieldCheck} label="Verify" hint="Bulk verification" />
       </div>
     </div>
   );
