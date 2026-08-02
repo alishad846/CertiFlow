@@ -10,6 +10,7 @@ import certificatesRoutes from './certificates';
 import subscriptionsRoutes from './subscriptions';
 import editorRoutes from './editor';
 import bulkVerificationRoutes from './bulk-verification';
+import companySigningRoutes from './company-signing';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.use('/logs', logsRoutes);
 router.use('/billing', billingRoutes);
 router.use('/companies', companiesRoutes);
 router.use('/certificate-templates', certificateTemplatesRoutes);
+router.use('/company-signing', companySigningRoutes);
 router.use('/subscription', subscriptionsRoutes);
 router.use(certificatesRoutes);
 
