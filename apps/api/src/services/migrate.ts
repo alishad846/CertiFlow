@@ -440,6 +440,24 @@ const migrationStatements = [
      certificates_used integer NOT NULL DEFAULT 0,
      created_at timestamptz NOT NULL DEFAULT NOW(),
      updated_at timestamptz NOT NULL DEFAULT NOW()
+   )`,
+
+  // ---- Company Digital Signature Certificate (DSC) for Form 16-style auto-signing ----
+  // P12 bytes + passphrase are stored encrypted (AES-256-GCM); see lib/crypto-at-rest.ts.
+  `CREATE TABLE IF NOT EXISTS company_signing_settings (
+     company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+     p12_ciphertext bytea NOT NULL,
+     p12_iv bytea NOT NULL,
+     p12_tag bytea NOT NULL,
+     pass_ciphertext bytea NOT NULL,
+     pass_iv bytea NOT NULL,
+     pass_tag bytea NOT NULL,
+     subject_cn text,
+     valid_to timestamptz,
+     auto_sign boolean NOT NULL DEFAULT true,
+     enabled boolean NOT NULL DEFAULT false,
+     created_at timestamptz NOT NULL DEFAULT NOW(),
+     updated_at timestamptz NOT NULL DEFAULT NOW()
    )`
 ];
 
