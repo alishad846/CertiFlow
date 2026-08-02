@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import signpdf from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
 import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
+import { SUBFILTER_ETSI_CADES_DETACHED } from '@signpdf/utils';
 import { env } from '../config/env';
 import { ensureDir } from './fs';
 
@@ -114,7 +115,10 @@ export async function finalizeCertificatePdf(
       reason: `Issued & verifiable at ${opts.verifyUrl}`,
       contactInfo: 'verify.certiflow',
       name: 'CertiFlow',
-      location: 'CertiFlow'
+      location: 'CertiFlow',
+      // PAdES-compliant subfilter (ETSI EN 319 142) rather than the legacy adbe.pkcs7.detached,
+      // so the signature is recognised as a PAdES signature by conformant validators.
+      subFilter: SUBFILTER_ETSI_CADES_DETACHED
     });
     const withPlaceholder = Buffer.from(await pdfDoc.save({ useObjectStreams: false }));
     const signer = new P12Signer(await getSigningP12(), { passphrase: env.CERT_SIGNING_P12_PASSPHRASE });

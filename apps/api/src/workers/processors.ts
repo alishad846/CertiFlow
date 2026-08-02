@@ -37,7 +37,7 @@ function buildClaimEmailHtml(message: string, context: Record<string, unknown>, 
     <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px; background: #f4f1ea; border: 1px solid #d6cfc1; border-radius: 16px;">
       <p style="color: #33436b; font-size: 16px; line-height: 1.7; margin: 0 0 8px;">${safe}</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${claimUrl}" style="display: inline-block; background: #0b1b3a; color: #f4f1ea; text-decoration: none; padding: 14px 34px; border-radius: 999px; font-weight: 600; letter-spacing: 0.02em;">Claim your certificate</a>
+        <a href="${claimUrl}" style="display: inline-block; background: #0b1b3a; color: #f4f1ea; text-decoration: none; padding: 14px 34px; border-radius: 999px; font-weight: 600; letter-spacing: 0.02em;">Claim Now</a>
       </div>
       <p style="color: #6b769a; font-size: 13px; line-height: 1.6; text-align: center; margin: 0;">Or open this link in your browser:<br><a href="${claimUrl}" style="color: #94703f; word-break: break-all;">${claimUrl}</a></p>
     </div>

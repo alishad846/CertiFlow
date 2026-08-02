@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/worker.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "start": "node --max_old_space_size=4096 dist/index.js",
     "start:worker": "node --max_old_space_size=4096 dist/worker.js",
     "db:reset": "tsx src/scripts/reset-db.ts",
@@ -19,6 +19,7 @@
     "@signpdf/placeholder-pdf-lib": "^3.3.0",
     "@signpdf/signer-p12": "^3.3.0",
     "@signpdf/signpdf": "^3.3.0",
+    "@signpdf/utils": "^3.3.0",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.58.0",

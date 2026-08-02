@@ -299,6 +299,9 @@ const migrationStatements = [
      ADD CONSTRAINT certificate_templates_render_engine_chk CHECK (render_engine IN ('legacy', 'editor'))`,
   `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'image'`,
   `ALTER TYPE upload_kind ADD VALUE IF NOT EXISTS 'pdf'`,
+  // The email queue claims a document atomically by flipping email_status pending -> 'sending'
+  // before dispatch (retry-safe). Older databases only had pending/sent/failed, so add the value.
+  `ALTER TYPE email_status ADD VALUE IF NOT EXISTS 'sending'`,
   `ALTER TABLE IF EXISTS batches
      DROP CONSTRAINT IF EXISTS batches_certificate_template_id_fkey`,
   `ALTER TABLE IF EXISTS batches

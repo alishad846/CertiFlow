@@ -284,6 +284,42 @@ async function sendWithResend(params: SendEmailParams) {
   }
 }
 
+/**
+ * Fallback sender for companies that have NOT configured a custom SMTP profile: send through the
+ * platform's global SMTP (env.SMTP_*), the same transport sendSystemEmail uses. We send AS the
+ * platform (MAIL_FROM, which is the authenticated mailbox — Gmail et al. reject an unverified From)
+ * and set Reply-To to the company's own sender so replies still reach them.
+ */
+async function sendWithSystemSmtp(params: SendEmailParams) {
+  if (!env.SMTP_HOST) {
+    throw new AppError('System SMTP host is not configured in .env', 500);
+  }
+  const port = env.SMTP_PORT;
+  const secure = port === 465 ? true : port === 587 ? false : env.SMTP_SECURE;
+  const transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port,
+    secure,
+    tls: env.SMTP_ALLOW_INVALID_CERTS ? { rejectUnauthorized: false } : undefined,
+    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
+  });
+  try {
+    await transporter.sendMail({
+      from: env.MAIL_FROM,
+      replyTo: params.senderEmail ?? undefined,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      attachments: getAttachments(params).map((attachment) => ({
+        filename: attachment.filename,
+        path: attachment.path
+      }))
+    });
+  } catch (error) {
+    throw new AppError(getSmtpErrorMessage(error, 'Email send failed'), 400);
+  }
+}
+
 export async function sendEmail(params: SendEmailParams) {
   const companySettings = await getCompanyEmailSettings(params.companyId);
   if (companySettings?.enabled) {
@@ -296,6 +332,13 @@ export async function sendEmail(params: SendEmailParams) {
   }
   if (env.EMAIL_PROVIDER === 'resend') {
     return sendWithResend(params);
+  }
+
+  // nodemailer provider + no company SMTP profile: fall back to the platform's global SMTP so
+  // batches/claims still send. (Previously this threw "not configured", blocking every send for
+  // companies that never set up a custom sender.)
+  if (env.EMAIL_PROVIDER === 'nodemailer' && env.SMTP_HOST) {
+    return sendWithSystemSmtp(params);
   }
 
   if (!companySettings) {
