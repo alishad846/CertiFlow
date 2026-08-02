@@ -119,6 +119,20 @@ function getSmtpErrorMessage(error: unknown, fallback: string) {
   return message || fallback;
 }
 
+/**
+ * True iff the company has a saved SMTP profile that is enabled and has a host. Used by the
+ * onboarding gate (/auth/me `smtpConfigured`) and the batch-creation guard.
+ */
+export async function isCompanyEmailConfigured(companyId: string | null): Promise<boolean> {
+  if (!companyId) return false;
+  const result = await pool.query<{ smtp_host: string | null; enabled: boolean }>(
+    `SELECT smtp_host, enabled FROM company_email_settings WHERE company_id = $1`,
+    [companyId]
+  );
+  const row = result.rows[0];
+  return Boolean(row?.enabled && row.smtp_host && row.smtp_host.trim());
+}
+
 async function getCompanyEmailSettings(companyId: string) {
   const result = await pool.query<CompanyEmailSettings>(
     `SELECT company_id, sender_name, sender_email, reply_to_name, reply_to_email, smtp_host, smtp_port, smtp_secure,
