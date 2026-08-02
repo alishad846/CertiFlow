@@ -460,8 +460,8 @@ router.get(
       [user.id]
     );
     const twoFactorEnabled = Boolean(tf.rows[0]?.two_factor_enabled);
-    // Super admins must protect the platform with 2FA.
-    const mustSetupTwoFactor = user.role === 'super_admin' && !twoFactorEnabled;
+    // Two-factor is optional and self-service in Settings; nothing is forced on the user anymore.
+    const mustSetupTwoFactor = false;
     // Onboarding gate: company admins must configure an email sender before issuing.
     const smtpConfigured =
       user.role === 'super_admin' ? true : await isCompanyEmailConfigured(user.companyId ?? null);

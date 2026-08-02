@@ -261,18 +261,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="min-w-0 flex-1 space-y-6">
-          {user?.mustSetupTwoFactor ? (
-            <a
-              href="/security"
-              className="flex items-center justify-between gap-4 rounded-[24px] border border-bronze/30 bg-bronze/10 px-6 py-4 transition hover:border-bronze"
-            >
-              <span className="flex items-center gap-3 text-sm text-bronze-deep">
-                <ShieldCheck className="h-5 w-5 shrink-0" />
-                Two-factor authentication is required for admin accounts. Set it up now to secure the platform.
-              </span>
-              <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-bronze-deep">Set up →</span>
-            </a>
-          ) : null}
           <div className="paper rounded-[30px] p-8">
             <p className="eyebrow">Welcome back</p>
             <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink md:text-5xl">
