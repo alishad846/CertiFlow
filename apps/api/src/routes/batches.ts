@@ -8,6 +8,7 @@ import { env } from '../config/env';
 import { AppError } from '../lib/errors';
 import { createBatch } from '../services/batches';
 import { getCompanyAccess } from '../services/companies';
+import { isCompanyEmailConfigured } from '../services/email';
 import { getCertificateTemplateById } from '../services/certificate-templates';
 import { pool } from '../db/pool';
 import { ensureDir, safeSegment } from '../services/fs';
@@ -193,6 +194,10 @@ router.post(
     }
     if (!company.can_create_batches) {
       throw new AppError('Batch creation is disabled for this company', 403);
+    }
+    // Onboarding gate: a company admin must configure and enable an email sender before issuing.
+    if (req.user?.role === 'company_admin' && !(await isCompanyEmailConfigured(companyId))) {
+      throw new AppError('Configure and enable your email sender in Settings first', 400);
     }
 
     if (templateType === 'certificate' && certificateTemplateId) {
