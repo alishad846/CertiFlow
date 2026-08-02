@@ -55,6 +55,7 @@ const envSchema = z.object({
   RESEND_FROM: z.string().default('no-reply@certiflow.local'),
   N8N_WEBHOOK_URL: z.string().optional().default(''),
   EMAIL_BATCH_DELAY_MS: z.coerce.number().default(30000),
+  EMAIL_QUEUE_JITTER_MS: z.coerce.number().default(5000),
   SOFFICE_PATH: z.string().default('soffice'),
 
   // Public web origin used to build claim/verify links inside emails.

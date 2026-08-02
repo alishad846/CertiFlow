@@ -90,6 +90,10 @@ function getAttachments(params: SendEmailParams) {
   return [];
 }
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function normalizeSmtpSecure(port: number, secure: boolean | null | undefined) {
   if (port === 465) {
     return true;
