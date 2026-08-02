@@ -23,7 +23,8 @@ import { emailQueue } from '../services/queue';
 import { renderTemplateString } from '../services/template-placeholders';
 import { issueCertificate, allocateUniquePublicId } from '../services/certificates';
 import { finalizeCertificatePdf } from '../services/certificate-finalize';
-import { getEntitlements, recordCertificateUsage } from '../services/subscriptions';
+import { recordCertificateUsage } from '../services/subscriptions';
+import { loadCompanyDscForSigning } from '../services/company-signing';
 
 function buildClaimEmailHtml(message: string, context: Record<string, unknown>, claimUrl: string) {
   const name = String(context?.name ?? '').trim() || 'there';
@@ -224,10 +225,6 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
   const claimMessage = claimSettingsResult?.rows[0]?.claim_message ?? batch.email_message ?? '';
   const claimSubject = claimSettingsResult?.rows[0]?.claim_subject ?? batch.name;
 
-  // Plan entitlements: signing is a paid-tier feature; usage is metered per issue.
-  const entitlements = isCertificateBatch ? await getEntitlements(batch.company_id) : null;
-  const canSign = entitlements?.features.signedPdfs ?? false;
-
   const docsResult = await pool.query<{
     id: string;
     recipient_name: string;
@@ -324,13 +321,22 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
           primaryDocxPath = renderedPngPath;
           primaryPdfPath = renderedPdfPath;
 
-          // Certificate flow: stamp a verification QR and digitally sign the PDF, then store it in the
-          // gated store, create the verifiable certificate + claim records, and email a claim link
-          // instead of attaching the PDF.
+          // Certificate flow: stamp a verification QR, add signature field(s), and auto-sign with the
+          // company DSC when configured. Then store it in the gated store, create the verifiable
+          // certificate + claim records, and email a claim link instead of attaching the PDF.
+          const companyDsc = await loadCompanyDscForSigning(batch.company_id);
+          // Offer-letter templates (built from an offer-letter design) get a candidate counter-sign
+          // field; plain certificates get only the authorized-signatory field.
+          const offerLetterRow = await pool.query<{ is_offer_letter: boolean }>(
+            'SELECT is_offer_letter FROM certificate_templates WHERE id = $1',
+            [certificateTemplate.id]
+          );
+          const isOfferLetter = Boolean(offerLetterRow.rows[0]?.is_offer_letter);
           const finalized = await finalizeCertificatePdf(renderedPdfPath, {
             verifyUrl: `${appBase}/verify/${publicId}`,
             publicId,
-            sign: canSign
+            signer: companyDsc,
+            addEmployeeField: isOfferLetter
           });
           await recordCertificateUsage(batch.company_id);
           const issued = await issueCertificate({

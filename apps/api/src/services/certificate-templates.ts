@@ -486,10 +486,11 @@ export async function createFromStockTemplate(params: {
     `UPDATE certificate_templates
        SET render_engine = 'editor',
            editor_document = $4,
+           is_offer_letter = $5,
            updated_by = $3,
            updated_at = NOW()
      WHERE id = $1 AND company_id = $2`,
-    [created.id, params.companyId, params.createdBy, design ? JSON.stringify(design) : null]
+    [created.id, params.companyId, params.createdBy, design ? JSON.stringify(design) : null, stock.category === 'offer-letter']
   );
 
   const finalTemplate = await getCertificateTemplateById(created.id, params.companyId);

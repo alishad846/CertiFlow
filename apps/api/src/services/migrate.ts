@@ -293,6 +293,9 @@ const migrationStatements = [
      ADD COLUMN IF NOT EXISTS editor_document jsonb`,
   `ALTER TABLE IF EXISTS certificate_templates
      ADD COLUMN IF NOT EXISTS render_engine text NOT NULL DEFAULT 'legacy'`,
+  // Marks templates built from an offer-letter design so the worker adds a candidate counter-sign field.
+  `ALTER TABLE IF EXISTS certificate_templates
+     ADD COLUMN IF NOT EXISTS is_offer_letter boolean NOT NULL DEFAULT false`,
   `ALTER TABLE IF EXISTS certificate_templates
      DROP CONSTRAINT IF EXISTS certificate_templates_render_engine_chk`,
   `ALTER TABLE IF EXISTS certificate_templates
