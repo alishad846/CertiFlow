@@ -448,12 +448,15 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
             senderName: batch.sender_name ?? undefined
           },
           {
-            attempts: 3,
-            backoff: {
-              type: 'exponential',
-              delay: 5000
-            }
-          }
+  attempts: 3,
+
+  delay: Math.floor(Math.random() * env.EMAIL_QUEUE_JITTER_MS),
+
+  backoff: {
+    type: 'exponential',
+    delay: 5000
+  }
+}
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to generate document';
@@ -499,19 +502,26 @@ export async function processEmailJob(
     senderName?: string;
   }>
 ) {
-  const documentResult = await pool.query<{
-    email_status: string;
-    batch_id: string;
-  }>(
-    `SELECT d.email_status, d.batch_id
-     FROM documents d
-     WHERE d.id = $1`,
-    [job.data.documentId]
-  );
-  const document = documentResult.rows[0];
+ const documentResult = await pool.query<{
+  email_status: string;
+  batch_id: string;
+}>(
+  `UPDATE documents
+   SET email_status = 'sending',
+       updated_at = NOW()
+   WHERE id = $1
+     AND email_status = 'pending'
+   RETURNING email_status, batch_id`,
+  [job.data.documentId]
+);
+
+const document = documentResult.rows[0];
   if (!document) {
-    throw new AppError('Document not found', 404);
-  }
+  console.log(
+    `Skipping email job for document ${job.data.documentId} (already processing or sent).`
+  );
+  return;
+}
 
   try {
     await sendEmail({
@@ -543,14 +553,27 @@ export async function processEmailJob(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Email send failed';
-    const shouldMarkFailed = (job.attemptsMade ?? 0) + 1 >= (job.opts.attempts ?? 1);
+    const lowerMessage = message.toLowerCase();
 
-    await pool.query(
-      `UPDATE documents
-       SET retry_count = retry_count + 1, updated_at = NOW()
-       WHERE id = $1`,
-      [job.data.documentId]
-    );
+const shouldRetry =
+  lowerMessage.includes('timeout') ||
+  lowerMessage.includes('connection') ||
+  lowerMessage.includes('network') ||
+  lowerMessage.includes('temporary');
+    const shouldMarkFailed =
+  !shouldRetry ||
+  (job.attemptsMade ?? 0) + 1 >= (job.opts.attempts ?? 1);
+
+    if (!shouldMarkFailed) {
+  await pool.query(
+    `UPDATE documents
+     SET retry_count = retry_count + 1,
+         email_status = 'pending',
+         updated_at = NOW()
+     WHERE id = $1`,
+    [job.data.documentId]
+  );
+}
 
     if (shouldMarkFailed) {
       await pool.query(
@@ -566,7 +589,11 @@ export async function processEmailJob(
       );
     }
 
-    throw error;
+    if (shouldRetry) {
+  throw error;
+}
+
+return;
   } finally {
     await refreshBatchCounts(job.data.batchId);
   }

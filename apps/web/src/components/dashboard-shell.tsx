@@ -140,6 +140,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </span>
                 </NavLink>
               ) : null}
+              {user?.role !== 'super_admin' ? (
+  <NavLink
+    href="/bulk-verification"
+    active={currentPath.startsWith('/bulk-verification')}
+  >
+    <span className="flex items-center gap-2">
+      <ShieldCheck className="h-4 w-4" /> Bulk Verification
+    </span>
+  </NavLink>
+) : null}
               {user?.role !== 'super_admin' && user?.permissions?.canCreateBatches !== false ? (
                 <NavLink href="/certificate-editor" active={currentPath.startsWith('/certificate-editor')}>
                   <span className="flex items-center gap-2">

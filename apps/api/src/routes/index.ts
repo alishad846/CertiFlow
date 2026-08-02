@@ -9,10 +9,12 @@ import certificateTemplatesRoutes from './certificate-templates';
 import certificatesRoutes from './certificates';
 import subscriptionsRoutes from './subscriptions';
 import editorRoutes from './editor';
+import bulkVerificationRoutes from './bulk-verification';
 
 const router = Router();
 
 router.use('/api/editor', editorRoutes);
+router.use('/api/bulk-verification', bulkVerificationRoutes);
 router.use('/auth', authRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/batches', batchRoutes);
