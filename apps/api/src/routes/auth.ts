@@ -469,6 +469,92 @@ router.get(
   })
 );
 
+const profileSchema = z.object({
+  name: z.string().min(2).optional(),
+  username: usernameSchema.optional(),
+  email: z.string().email().optional()
+});
+
+// Update the signed-in user's own name / username / email. Enforces case-insensitive uniqueness
+// and re-issues the auth cookie so identity changes take effect immediately.
+router.patch(
+  '/profile',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = profileSchema.parse(req.body);
+    const id = req.user!.id;
+
+    if (parsed.username) {
+      const taken = await pool.query('SELECT id FROM users WHERE lower(username) = lower($1) AND id <> $2', [
+        parsed.username,
+        id
+      ]);
+      if (taken.rows[0]) throw new AppError('Username already taken', 409, 'username_taken');
+    }
+    if (parsed.email) {
+      const taken = await pool.query('SELECT id FROM users WHERE lower(email) = lower($1) AND id <> $2', [
+        parsed.email,
+        id
+      ]);
+      if (taken.rows[0]) throw new AppError('Email already exists', 409);
+    }
+
+    const sets: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+    for (const key of ['name', 'username', 'email'] as const) {
+      if (parsed[key] !== undefined) {
+        sets.push(`${key} = $${i}`);
+        values.push(parsed[key]);
+        i += 1;
+      }
+    }
+    if (!sets.length) throw new AppError('No changes provided', 400);
+    values.push(id);
+
+    const updated = await pool.query(
+      `UPDATE users SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${i}
+       RETURNING id, company_id, role, email, name, token_version`,
+      values
+    );
+    const row = updated.rows[0];
+    setAuthCookie(res, issueToken({ ...serializeUser(row), tokenVersion: row.token_version }));
+    res.json({ user: serializeUser(row) });
+  })
+);
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8)
+});
+
+// Change the signed-in user's password. Verifies the current password, then bumps token_version to
+// invalidate every other session and re-issues this session's cookie.
+router.post(
+  '/change-password',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = passwordChangeSchema.parse(req.body);
+    const result = await pool.query(
+      'SELECT id, company_id, role, email, name, token_version, password_hash FROM users WHERE id = $1',
+      [req.user!.id]
+    );
+    const user = result.rows[0];
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      throw new AppError('Current password is incorrect', 401);
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const nextVersion = (user.token_version ?? 0) + 1;
+    await pool.query('UPDATE users SET password_hash = $1, token_version = $2, updated_at = NOW() WHERE id = $3', [
+      passwordHash,
+      nextVersion,
+      user.id
+    ]);
+    setAuthCookie(res, issueToken({ ...serializeUser(user), tokenVersion: nextVersion }));
+    res.json({ ok: true });
+  })
+);
+
 router.post('/logout', (_req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
