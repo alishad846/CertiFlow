@@ -189,6 +189,17 @@ function Nav() {
 }
 
 function Hero() {
+  // Every document in the hero stack lives here. Adjust left/right, top, w, rotate,
+  // or z-* on any entry to reposition it or move it in front of another document.
+  const documentStack = [
+    { type: 'image', src: '/landing/offer-letter-gold.png', alt: 'Gold offer letter template', className: 'right-13 top-50 z-0 w-[198px]', rotate: -6, float: 10, duration: 5, delay: 0.35 },
+    { type: 'image', src: '/landing/certificate-ornate.png', alt: 'Ornate certificate template', className: 'left-5 top-2 z-25 w-[315px]', rotate: -12, float: 7, duration: 15, delay: 0.15 },
+    { type: 'offer-svg', className: 'right-3 top-1 z-20 w-[190px]', rotate: 15, float: 8, duration: 13, delay: 0.6 },
+    { type: 'image', src: '/landing/offer-letter-blue.png', alt: 'Blue offer letter template', className: 'right-8 top-14 z-30 w-[210px]', rotate: -10, float: 6, duration: 13, delay: 0.8 },
+    { type: 'certificate-svg', className: 'left-0 top-28 z-40 w-[365px]', rotate: 2, float: 10, duration: 11, delay: 0 },
+    { type: 'image', src: '/landing/certificate-modern.png', alt: 'Modern certificate template', className: 'left-12 top-50 z-50 w-[340px]', rotate: -5, float: 9, duration: 14, delay: 0.5 }
+  ];
+
   return (
     <section className="flex min-h-screen items-center overflow-hidden px-6 pb-16 pt-20">
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-10 lg:grid-cols-2">
@@ -212,22 +223,29 @@ function Hero() {
             <a href="#how" className="border-b border-ink/28 pb-0.5 text-sm text-ink/60 transition-all hover:border-ink/60 hover:text-ink">See how it works</a>
           </motion.div>
         </div>
-        <div className="relative hidden h-[480px] lg:block">
+        <div className="relative hidden h-[500px] lg:block" aria-label="A selection of certificate and offer letter templates">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="h-[340px] w-[340px] rounded-full blur-[80px]" style={{ background: 'radial-gradient(circle, rgba(184,146,46,0.18) 0%, transparent 70%)' }} />
           </div>
-          <motion.div initial={{ opacity: 0, x: 40, rotate: -6 }} animate={{ opacity: 0.88, x: 0, rotate: -5 }} transition={{ duration: 1.1, delay: 0.55, ease: EASE }}
-            className="absolute right-0 top-4 w-[210px]">
-            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 13, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}>
-              <OfferLetterMockup className="w-full" />
+          {documentStack.map((document, index) => (
+            <motion.div
+              key={`${document.type}-${index}`}
+              initial={{ opacity: 0, scale: 0.94, y: 22, rotate: document.rotate - 3 }}
+              animate={{ opacity: 1, scale: 1, y: 0, rotate: document.rotate }}
+              transition={{ duration: 1.05, delay: 0.42 + index * 0.12, ease: EASE }}
+              className={`absolute ${document.className}`}
+            >
+              <motion.div animate={{ y: [0, -document.float, 0], rotate: [0, 0.7, 0] }} transition={{ duration: document.duration, repeat: Infinity, ease: 'easeInOut', delay: document.delay }}>
+                {document.type === 'image' ? (
+                  <img src={document.src} alt={document.alt} className="w-full rounded-[5px] border border-white/70 shadow-[0_18px_38px_rgba(11,22,40,0.22)]" />
+                ) : document.type === 'offer-svg' ? (
+                  <OfferLetterMockup className="w-full" />
+                ) : (
+                  <CertificateMockup className="w-full" />
+                )}
+              </motion.div>
             </motion.div>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, x: -40, rotate: 3 }} animate={{ opacity: 1, x: 0, rotate: 2 }} transition={{ duration: 1.1, delay: 0.72, ease: EASE }}
-            className="absolute left-0 top-28 w-[370px]">
-            <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}>
-              <CertificateMockup className="w-full" />
-            </motion.div>
-          </motion.div>
+          ))}
         </div>
       </div>
     </section>
