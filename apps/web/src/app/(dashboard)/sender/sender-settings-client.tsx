@@ -58,7 +58,13 @@ function hasSavedPassword(lastUpdated: string | null) {
   return Boolean(lastUpdated);
 }
 
-export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: string }) {
+export function SenderSettingsClient({
+  initialCompanyId,
+  onSaved
+}: {
+  initialCompanyId: string;
+  onSaved?: () => void;
+}) {
   const [role, setRole] = useState<MeResponse['user']['role'] | null>(null);
   const [companyId, setCompanyId] = useState(initialCompanyId);
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
@@ -221,6 +227,7 @@ export function SenderSettingsClient({ initialCompanyId }: { initialCompanyId: s
       setMessage(isConfigComplete ? 'Email sender settings saved successfully and enabled automatically.' : 'Email sender settings saved successfully, but it is still incomplete.');
       setSmtpPass('');
       await loadSettings(resolvedCompanyId);
+      onSaved?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to save email sender settings');
     } finally {
