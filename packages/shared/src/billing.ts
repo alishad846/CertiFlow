@@ -52,27 +52,27 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     key: 'starter',
     name: 'Starter',
-    description: 'For small teams that want to buy credits in a simple way.',
+    description: '500 credits to send your first batches.',
     credits: 500,
     amountInr: 1499,
-    features: ['500 credits included', 'Batch generation support', 'Email logs and retries']
+    features: ['500 document credits', 'Signed, verifiable PDFs', 'QR + tamper-evident verification']
   },
   {
     key: 'growth',
     name: 'Growth',
-    description: 'Best for regular certificate and offer letter batches.',
+    description: '2,000 credits — best value for active teams.',
     credits: 2000,
     amountInr: 4999,
     recommended: true,
-    features: ['2,000 credits included', 'Priority batch processing', 'Best value for active teams']
+    features: ['2,000 document credits', 'Priority batch processing', 'Best value per credit']
   },
   {
     key: 'scale',
     name: 'Scale',
-    description: 'For larger operations that need more credits upfront.',
+    description: '5,000 credits for high-volume sending.',
     credits: 5000,
     amountInr: 9999,
-    features: ['5,000 credits included', 'Higher volume sending', 'Ideal for teams sending at scale']
+    features: ['5,000 document credits', 'Highest volume sending', 'Ideal for large hiring drives']
   }
 ];
 

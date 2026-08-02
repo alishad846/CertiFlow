@@ -281,6 +281,16 @@ export default function BillingPage() {
                 </div>
                 <p className="mt-2 text-sm font-medium text-bronze-deep">{plan.credits.toLocaleString('en-IN')} credits</p>
                 <p className="mt-3 text-sm leading-6 text-ink-soft">{plan.description}</p>
+                {plan.features.length ? (
+                  <ul className="mt-4 space-y-1.5 border-t border-[color:var(--color-border)] pt-4">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm text-ink-soft">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-bronze-deep" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </button>
             ))}
           </div>
