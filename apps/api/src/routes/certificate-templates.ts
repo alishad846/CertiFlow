@@ -24,7 +24,11 @@ import {
   updateCertificateTemplate,
   updateCertificateTemplateDesign
 } from '../services/certificate-templates';
-import { readExcelRecipients, buildTemplateContext } from '../services/excel';
+import {
+  readExcelRecipients,
+  buildTemplateContext,
+  extractExcelFields
+} from '../services/excel';
 import {
   listCertificateBackgroundPreviewPages,
   renderCertificateBackgroundPreviewPage,
@@ -515,6 +519,32 @@ router.put(
       editorDocument: body.editorDocument
     });
     res.json({ template: updated });
+  })
+);
+
+// New (feature/certificate-editor-ai): extract column headers from an uploaded sheet so they can be
+// offered as merge fields. Additive endpoint; does not affect the existing design/save flow above.
+router.post(
+  '/extract-fields',
+  requireAuth,
+  requireRole('company_admin', 'super_admin'),
+  previewUpload.single('excelFile'),
+  asyncHandler(async (req, res) => {
+    const excelFile = req.file;
+
+    if (!excelFile) {
+      throw new AppError('Excel file is required', 400);
+    }
+
+    try {
+      const fields = await extractExcelFields(excelFile.path);
+
+      res.json({
+        fields
+      });
+    } finally {
+      await fs.promises.unlink(excelFile.path).catch(() => undefined);
+    }
   })
 );
 

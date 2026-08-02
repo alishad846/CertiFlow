@@ -2,7 +2,9 @@ node_modules
 .next
 dist
 .git
-.env
+# .env is intentionally NOT listed here.
+# docker-compose reads .env from the HOST for ${VAR} substitution — it is never
+# baked into the image build context. Keep it off .dockerignore so Compose works.
 apps/api/uploads
 postgres_data
 redis_data
