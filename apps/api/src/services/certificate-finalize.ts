@@ -8,7 +8,7 @@ import {
   PDFNumber,
   PDFString,
   StandardFonts,
-  rgb
+  rgb,
 } from 'pdf-lib';
 import signpdf from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
@@ -43,17 +43,47 @@ async function stampQr(pdfBytes: Buffer, verifyUrl: string, publicId: string): P
   return { bytes: await pdfDoc.save({ useObjectStreams: false }), qr: { x, y, size: qrSize, margin } };
 }
 
-/**
- * Create a standards-compliant, EMPTY (unsigned) AcroForm digital-signature field: a real
- * `/FT /Sig` widget annotation with a visible rectangle and a normal-appearance (`/AP /N`) form
- * XObject. This is exactly the placeholder shape an Indian Form-16 (or any signable) PDF ships — when
- * opened in Adobe Acrobat Reader it renders the standard unsigned-signature appearance and lets the
- * user click it and sign with their own Digital ID. Nothing here is a drawn picture of a signature;
- * it is the actual interactive field the viewer owns.
- *
- * AcroForm is edited on the catalog directly (mirroring @signpdf) rather than via pdf-lib's getForm(),
- * which does not model signature fields.
- */
+async function drawSignatureAppearance(
+  pdfDoc: PDFDocument,
+  rect: FieldRect,
+  signerName: string
+) {
+  const page = pdfDoc.getPage(0);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const now = new Date();
+  const date = now.toLocaleDateString();
+
+  page.drawRectangle({
+    x: rect.x,
+    y: rect.y,
+    width: rect.w,
+    height: rect.h,
+    borderWidth: 1,
+    borderColor: rgb(0, 0, 0)
+  });
+
+  page.drawText("Digitally signed by", {
+  x: rect.x + 8,
+  y: rect.y + rect.h - 18,
+  size: 8,
+  font
+});
+
+page.drawText(signerName, {
+  x: rect.x + 8,
+  y: rect.y + rect.h - 32,
+  size: 10,
+  font
+});
+
+page.drawText(`Date: ${date}`, {
+  x: rect.x + 8,
+  y: rect.y + 10,
+  size: 8,
+  font
+});
+}
+
 function addUnsignedSignatureField(pdfDoc: PDFDocument, rect: FieldRect) {
   const context = pdfDoc.context;
   const page = pdfDoc.getPage(0);
@@ -129,7 +159,13 @@ export async function finalizeCertificatePdf(
 
   // Signature field(s) sit in the bottom-left, mirroring the QR in the bottom-right.
   const sigW = Math.min(width * 0.34, 215);
-  const employerRect: FieldRect = { name: 'AuthorizedSignatory', x: qr.margin, y: qr.y, w: sigW, h: qr.size };
+  const employerRect: FieldRect = {
+  name: 'AuthorizedSignatory',
+  x: qr.margin,
+  y: qr.y,
+  w: sigW,
+  h: qr.size
+};
   const candidateRect: FieldRect = {
     name: 'CandidateAcceptance',
     x: qr.margin,
@@ -150,6 +186,8 @@ export async function finalizeCertificatePdf(
     if (opts.signer) {
       // The candidate field must exist BEFORE we sign, so it is covered by the employer signature.
       if (opts.addEmployeeField) addUnsignedSignatureField(layoutDoc, candidateRect);
+
+      await drawSignatureAppearance(layoutDoc, employerRect, signerDisplayName);
 
       // VISIBLE PAdES signature for the authorized signatory (widgetRect makes it an on-page field, not
       // the library default invisible [0,0,0,0] one). Adobe draws its signature/validity appearance here.
