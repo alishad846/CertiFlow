@@ -266,8 +266,16 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
       try {
         if (batch.template_type === 'certificate' && certificateTemplate) {
           const baseName = `${document.row_index}-${safeName}`;
+          const storedBackgroundPath = certificateTemplate.backgroundStoredPath;
+
+const resolvedBackgroundPath = path.isAbsolute(storedBackgroundPath)
+  ? storedBackgroundPath
+  : path.join(
+      env.UPLOAD_DIR,
+      storedBackgroundPath.replace(/^uploads[\\/]/i, '')
+    );
           const rendered = await renderCertificatePdf({
-            backgroundPath: certificateTemplate.backgroundStoredPath,
+            backgroundPath: resolvedBackgroundPath,
             fields: certificateTemplate.fieldConfig,
             context: certificateContext,
             outputDir: path.join(outputRoot, 'certificate'),
@@ -412,10 +420,14 @@ export async function processBatchJob(job: Job<{ batchId: string }>) {
   }
 }
         );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to generate document';
-        await markDocumentFailed(document.id, batch.id, message);
-      }
+      }catch (error) {
+  const message =
+    error instanceof Error ? error.message : 'Failed to generate document';
+
+  console.error('DOCUMENT GENERATION ERROR:', error);
+
+  await markDocumentFailed(document.id, batch.id, message);
+}
     }
 
     await refreshBatchCounts(batch.id);

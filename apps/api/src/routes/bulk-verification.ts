@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
 import { getVerification } from '../services/certificates';
+import { createWorker, PSM } from 'tesseract.js';
 
 type LinkVerificationResult = {
   status: 'verified' | 'suspicious' | 'invalid';
@@ -681,7 +682,80 @@ router.post(
               await parser.destroy();
             }
           }
+if (
+  file.mimetype === 'image/jpeg' ||
+  file.mimetype === 'image/png'
+) {
+  const worker = await createWorker('eng', 1, {
+  logger: (message) => {
+    if (message.status === 'recognizing text') {
+      console.log(
+        `OCR progress: ${Math.round((message.progress ?? 0) * 100)}%`,
+      );
+    }
+  },
+});
 
+  try {
+    await worker.setParameters({
+  tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+  preserve_interword_spaces: '1',
+});
+    const {
+  data: { text },
+} = await worker.recognize(file.buffer);
+
+extractedText = text
+  .replace(/\n+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+console.log("========== IMAGE OCR ==========");
+console.log(extractedText);
+console.log("==============================");
+
+    extractedText = text ?? '';
+
+    console.log('========== IMAGE OCR ==========');
+    console.log(extractedText);
+    console.log('===============================');
+  } catch (error) {
+    console.error(
+      `Image OCR failed for ${file.originalname}:`,
+      error,
+    );
+  } finally {
+    await worker.terminate();
+  }
+}
+const readableCharacters =
+  extractedText.match(/[A-Za-z0-9]/g)?.length ?? 0;
+
+const readableWords =
+  extractedText
+    .split(/\s+/)
+    .filter((word) => /[A-Za-z]{3,}/.test(word)).length;
+
+const hasReadableOcrText =
+  readableCharacters >= 20 &&
+  readableWords >= 3;
+
+if (
+  (file.mimetype === 'image/jpeg' ||
+    file.mimetype === 'image/png') &&
+  !hasReadableOcrText
+) {
+  return {
+    student: 'Name not detected',
+    certificateId: 'Not detected',
+    status: 'Pending',
+    reason:
+      'The certificate image could not be read clearly. Please upload a clearer, higher-resolution image.',
+    source: file.originalname,
+    documentType: 'Unknown Document',
+    trustScore: 0,
+  };
+}
          const publicIdMatch = extractedText.match(
   /\bCF-[0-9A-Z]{4,8}-[0-9A-Z]{2,6}\b/i,
 );
@@ -693,13 +767,27 @@ const hasStudentName = studentName !== 'Name not detected';
 const normalizedText = extractedText.toLowerCase();
 
 const certificateKeywords = [
-  'certificate',
-  'certifies that',
-  'awarded to',
-  'presented to',
-  'course completion',
-  'credential id',
-  'certificate id',
+  "certificate",
+  "certificate of completion",
+  "certificate of achievement",
+  "course certificate",
+  "credential id",
+  "certificate id",
+  "certifies that",
+  "awarded to",
+  "presented to",
+  "successfully completed",
+  "completion",
+  "issued",
+  "issued on",
+  "coursera",
+  "udemy",
+  "linkedin learning",
+  "google",
+  "microsoft",
+  "oracle",
+  "aws",
+  "cisco",
 ];
 
 const offerLetterKeywords = [

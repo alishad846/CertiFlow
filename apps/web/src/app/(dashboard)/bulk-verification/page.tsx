@@ -71,6 +71,9 @@ function removeFile(indexToRemove: number) {
   setFiles((currentFiles) =>
     currentFiles.filter((_, index) => index !== indexToRemove),
   );
+
+  // Remove old verification details after changing uploaded files
+  setResults([]);
 }
 
   async function verifyCertificates() {
@@ -234,7 +237,10 @@ function downloadCsv() {
 
       <button
         type="button"
-        onClick={() => setFiles([])}
+        onClick={() => {
+  setFiles([]);
+  setResults([]);
+}}
         className="text-sm font-medium text-red-600 hover:underline"
       >
         Clear all
