@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
+import { createWorker } from 'tesseract.js';
+import { createCanvas } from '@napi-rs/canvas';
+import {
+  loadPdfJs,
+  getPdfjsStandardFontDataUrl,
+} from '../services/pdf-runtime';
 import { getVerification } from '../services/certificates';
 
 type LinkVerificationResult = {
@@ -14,6 +20,79 @@ type LinkVerificationResult = {
   verifiedUrl: string;
   reason: string;
 };
+
+async function extractOcrTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+  const pdfjs = await loadPdfJs();
+
+  const loadingTask = pdfjs.getDocument({
+  data: new Uint8Array(pdfBuffer),
+  standardFontDataUrl: getPdfjsStandardFontDataUrl(),
+  useWorkerFetch: false,
+  useSystemFonts: true,
+});
+
+  const pdf = await loadingTask.promise;
+  const worker = await createWorker('eng');
+
+  let ocrText = '';
+
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+
+      try {
+
+        const textContent = await page.getTextContent();
+
+const pageText = textContent.items
+  .map((item: any) => item.str ?? '')
+  .join(' ')
+  .trim();
+
+if (pageText.length > 50) {
+  ocrText += `${pageText}\n`;
+  continue;
+}
+        const viewport = page.getViewport({ scale: 1 });
+
+        const canvas = createCanvas(
+          Math.ceil(viewport.width),
+          Math.ceil(viewport.height),
+        );
+
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+
+        const context = canvas.getContext('2d');
+
+        try {
+          await page.render({
+            canvas: canvas as any,
+            canvasContext: context as any,
+            viewport,
+          }).promise;
+
+          const imageBuffer = canvas.toBuffer('image/png');
+          const result = await worker.recognize(imageBuffer);
+
+          ocrText += `${result.data.text}\n`;
+        } catch (renderError) {
+          console.error(
+            `OCR rendering failed for PDF page ${pageNumber}:`,
+            renderError,
+          );
+        }
+      } finally {
+        page.cleanup();
+      }
+    }
+  } finally {
+    await worker.terminate();
+    await pdf.destroy();
+  }
+
+  return ocrText;
+}
 
 function detectVerificationProvider(link: string): string {
   try {
@@ -521,23 +600,23 @@ export function applyCandidateNameMatching<T extends {
       return result;
     }
 
-    if (
-      result.student === 'Name not detected' ||
-      result.student === 'unknown'
-    ) {
-      return {
-        ...result,
-        status: result.status === 'Verified' ? 'Fake' : result.status,
-        reason: `${result.reason}. Candidate name could not be confirmed against the uploaded resume.`,
-      };
-    }
-
     if (normalizedResumeNames.length === 0) {
-      return {
-        ...result,
-        reason: `${result.reason}. No candidate resume was available for name matching.`,
-      };
-    }
+  return {
+    ...result,
+    reason: `${result.reason}. No candidate resume was provided; certificate verification was performed using the certificate record.`,
+  };
+}
+
+if (
+  result.student === 'Name not detected' ||
+  result.student === 'unknown'
+) {
+  return {
+    ...result,
+    status: result.status === 'Verified' ? 'Pending' : result.status,
+    reason: `${result.reason}. Candidate name could not be extracted from the uploaded document.`,
+  };
+}
 
     const documentName = normalizeCandidateName(result.student);
     const hasMatchingResume = normalizedResumeNames.includes(documentName);
@@ -628,15 +707,13 @@ router.post(
             try {
               const parsedPdf = await parser.getText();
               extractedText = parsedPdf.text ?? '';
+              console.log('EXTRACTED PDF TEXT:', extractedText);
 
               console.log('========== PDF TEXT ==========');
               console.log(extractedText);
               console.log('==============================');
 
               const labelledNamePatterns = [
-  // Resume
-  /^([A-Z][A-Z\s.'-]{3,60})$/m,
-
   // Certificate
   /(?:student\s*name|recipient\s*name|candidate\s*name)\s*[:\-]\s*(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
   /(?:awarded\s+to|presented\s+to|certifies\s+that|this\s+is\s+to\s+certify\s+that)\s+(?!_)([A-Za-z][A-Za-z .'-]{2,60})/i,
@@ -644,6 +721,9 @@ router.post(
   // Offer Letter
   /Dear\s+([A-Za-z][A-Za-z .'-]{2,60})/i,
   /Employee\s*Name\s*[:\-]\s*([A-Za-z][A-Za-z .'-]{2,60})/i,
+
+  // Resume
+  /^([A-Z][A-Z\s.'-]{3,60})$/m,
 ];
 
               for (const pattern of labelledNamePatterns) {
@@ -681,6 +761,20 @@ router.post(
               await parser.destroy();
             }
           }
+
+if (studentName === 'Name not detected') {
+  const filenameName = file.originalname
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+
+  if (
+    filenameName.length >= 3 &&
+    !/^(certificate|document|sample|test)$/i.test(filenameName)
+  ) {
+    studentName = filenameName;
+  }
+}
 
          const publicIdMatch = extractedText.match(
   /\bCF-[0-9A-Z]{4,8}-[0-9A-Z]{2,6}\b/i,
@@ -730,9 +824,11 @@ const resumeKeywords = [
   'linkedin',
 ];
 
-const appearsToBeCertificate = certificateKeywords.some((keyword) =>
-  normalizedText.includes(keyword),
-);
+const appearsToBeCertificate =
+  !!publicId ||
+  certificateKeywords.some((keyword) =>
+    normalizedText.includes(keyword),
+  );
 
 const appearsToBeOfferLetter = offerLetterKeywords.some((keyword) =>
   normalizedText.includes(keyword),
@@ -897,6 +993,34 @@ if (!verification.found) {
     trustScore,
   };
 }
+
+const uploadedName =
+  studentName === 'Name not detected'
+    ? ''
+    : normalizeCandidateName(studentName);
+
+const storedName = normalizeCandidateName(verification.recipientName ?? '');
+
+if (
+  uploadedName &&
+  storedName &&
+  uploadedName !== storedName
+) {
+  return {
+    student: studentName,
+    certificateId: publicId,
+    status: 'Fake',
+    reason: `Certificate holder name does not match the CertiFlow record. Expected "${verification.recipientName}", found "${studentName}".`,
+    source: file.originalname,
+    documentType,
+    trustScore: Math.min(trustScore, 30),
+  };
+}
+
+trustScore += 25;
+trustReasons.push('Certificate ID matched a valid CertiFlow record');
+trustScore = Math.min(trustScore, 100);
+
 let finalStatus: 'Verified' | 'Pending' | 'Fake';
 
 if (trustScore >= 80) {
